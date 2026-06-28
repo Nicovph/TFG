@@ -1,0 +1,79 @@
+# Docker Compose file for the Traductor_TEA project.
+# Defines a single PostgreSQL container with secure secrets support,
+# persistent storage, and a local-only port mapping for development.
+
+name: traductor-tea
+
+services:
+  db:
+    image: postgres:16-bookworm
+    # Restart policy: restart the container automatically unless it was
+    # explicitly stopped by the user. This supports resiliency during
+    # transient failures and host reboots while preserving intentional stops.
+    restart: unless-stopped
+
+    # PostgreSQL container environment variables.
+    # The admin password is read from a Docker secret file rather than stored here.
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
+
+    # Mount secrets into the container for database initialization and runtime use.
+    secrets:
+      - source: postgres_admin_password
+        target: postgres_admin_password
+
+      - source: db_app_config
+        target: db_app_config
+
+      - source: db_migrate_config
+        target: db_migrate_config
+
+      - source: db_test_config
+        target: db_test_config
+
+    ports:
+      - "127.0.0.1:5432:5432"
+
+    volumes:
+      # Persistent PostgreSQL storage volume.
+      - postgres_data:/var/lib/postgresql/data
+      # Mount initialization scripts so PostgreSQL can run them on first startup.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      # Mount SQL files used by the init script for database setup.
+      - ./docker/postgres/sql:/opt/traductor-tea/sql:ro
+
+    healthcheck:
+      # The healthcheck verifies PostgreSQL is ready to accept connections.
+      # It uses the pg_isready utility inside the container and checks the
+      # configured database and user.
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"
+        ]
+      # Check every 5 seconds to quickly detect service readiness/failure.
+      interval: 5s
+      # Give each command up to 3 seconds to complete before marking it failed.
+      timeout: 3s
+      # Require 10 consecutive failures before the container is considered unhealthy.
+      retries: 10
+      # Allow PostgreSQL up to 10 seconds to start before health checks begin.
+      start_period: 10s
+
+
+secrets:
+  postgres_admin_password:
+    file: ./.secrets/db-admin-password.txt
+
+  db_app_config:
+    file: ./.secrets/db-app.env
+
+  db_migrate_config:
+    file: ./.secrets/db-migrate.env
+
+  db_test_config:
+    file: ./.secrets/db-test.env
+volumes:
+  postgres_data:
