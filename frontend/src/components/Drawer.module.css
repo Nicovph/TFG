@@ -1,0 +1,121 @@
+/* Drawer.module.css styles the modal left navigation drawer. */
+
+.drawerLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.drawerBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: var(--color-overlay-soft);
+  cursor: pointer;
+}
+
+.drawerPanel {
+  width: min(390px, 88vw);
+  min-height: 100svh;
+  position: relative;
+  z-index: 1;
+  padding: 26px 24px;
+  display: grid;
+  align-content: start;
+  gap: 42px;
+  background: var(--color-background);
+  box-shadow: var(--shadow-drawer);
+}
+
+.drawerHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.drawerBrand {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.drawerBrand span {
+  color: transparent;
+  background: var(--brand-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.closeButton {
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  position: relative;
+  border: 0;
+  border-radius: var(--radius-medium);
+  background: transparent;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.closeButton span,
+.closeButton span::before {
+  width: 24px;
+  height: 3px;
+  display: block;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+.closeButton span {
+  transform: rotate(45deg);
+}
+
+.closeButton span::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: rotate(90deg);
+}
+
+.drawerNav {
+  display: grid;
+  gap: 6px;
+}
+
+.drawerNav button {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.drawerNav .primaryNavItem {
+  min-height: 58px;
+  margin-bottom: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #b9b9c2;
+}
+
+.closeButton:focus-visible,
+.drawerBackdrop:focus-visible,
+.drawerNav button:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 3px;
+}
+
+@media (max-width: 520px) {
+  .drawerPanel {
+    width: 100vw;
+  }
+}

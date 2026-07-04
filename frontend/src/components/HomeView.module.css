@@ -1,0 +1,128 @@
+/* HomeView.module.css styles the initial TEAslator entry screen. */
+
+.homeView {
+  min-height: 100svh;
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.homeHeader {
+  min-height: 84px;
+  display: flex;
+  align-items: center;
+  padding: 18px var(--page-inline-padding);
+}
+
+.menuButton {
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-medium);
+  background: transparent;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.menuButton span,
+.menuButton span::before,
+.menuButton span::after {
+  width: 24px;
+  height: 3px;
+  display: block;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+.menuButton span {
+  position: relative;
+}
+
+.menuButton span::before,
+.menuButton span::after {
+  content: '';
+  position: absolute;
+  left: 0;
+}
+
+.menuButton span::before {
+  top: -7px;
+}
+
+.menuButton span::after {
+  top: 7px;
+}
+
+.homeContent {
+  min-height: calc(100svh - 116px);
+  width: min(520px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 24px 0 64px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 14px;
+}
+
+.homeLogo {
+  width: clamp(118px, 26vw, 172px);
+  height: clamp(118px, 26vw, 172px);
+  object-fit: contain;
+}
+
+.homeTitle {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: clamp(2.35rem, 9vw, 4.6rem);
+  line-height: 0.95;
+  text-align: center;
+}
+
+.homeTitle span {
+  color: transparent;
+  background: var(--brand-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.brandTagline {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.45em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.googleButton {
+  min-height: 44px;
+  margin-top: 18px;
+  padding: 0 26px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-strong);
+  color: var(--color-background);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 14px 32px rgba(112, 91, 230, 0.22);
+}
+
+.menuButton:focus-visible,
+.googleButton:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 3px;
+}
+
+@media (max-width: 520px) {
+  .homeContent {
+    min-height: calc(100svh - 96px);
+  }
+
+  .brandTagline {
+    font-size: 0.48rem;
+    letter-spacing: 0.32em;
+  }
+}

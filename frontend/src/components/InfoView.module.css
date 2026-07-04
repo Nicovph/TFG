@@ -1,0 +1,167 @@
+/* InfoView.module.css styles static legal and project information pages. */
+
+.infoView {
+  min-height: 100svh;
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.infoHeader {
+  min-height: 132px;
+  padding: 18px var(--page-inline-padding);
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.menuButton {
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-medium);
+  background: transparent;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.infoNavigation {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.backButton {
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-medium);
+  background: transparent;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.backButton span {
+  width: 14px;
+  height: 14px;
+  display: block;
+  border-bottom: 3px solid currentColor;
+  border-left: 3px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.infoBrandButton {
+  max-width: 220px;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.menuButton span,
+.menuButton span::before,
+.menuButton span::after {
+  width: 24px;
+  height: 3px;
+  display: block;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+.menuButton span {
+  position: relative;
+}
+
+.menuButton span::before,
+.menuButton span::after {
+  content: '';
+  position: absolute;
+  left: 0;
+}
+
+.menuButton span::before {
+  top: -7px;
+}
+
+.menuButton span::after {
+  top: 7px;
+}
+
+.infoBrandButton img {
+  width: 74px;
+  height: 74px;
+  object-fit: contain;
+}
+
+.brandName {
+  color: var(--color-text-muted);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.brandName span {
+  color: transparent;
+  background: var(--brand-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.infoBrandTagline {
+  color: var(--color-text-muted);
+  font-size: 0.38rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+
+.infoArticle {
+  width: min(780px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: clamp(20px, 6vw, 80px) 0 84px;
+}
+
+.infoArticle h1 {
+  margin: 0 0 22px;
+  color: var(--color-text-strong);
+  font-size: clamp(2rem, 6vw, 3.6rem);
+  line-height: 1.05;
+}
+
+.infoArticle p {
+  max-width: 68ch;
+  margin: 0 0 16px;
+  color: #5b5b65;
+  font-size: 1rem;
+}
+
+.menuButton:focus-visible,
+.backButton:focus-visible,
+.infoBrandButton:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  .infoHeader {
+    align-items: start;
+  }
+
+  .infoBrandButton {
+    max-width: 160px;
+  }
+
+  .infoBrandButton img {
+    width: 58px;
+    height: 58px;
+  }
+}

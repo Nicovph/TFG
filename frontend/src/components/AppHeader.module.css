@@ -1,0 +1,154 @@
+/* AppHeader.module.css styles the main workspace header and popover backdrop. */
+
+.appHeader {
+  min-height: 84px;
+  padding: 18px var(--page-inline-padding);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  color: var(--color-text);
+  background: var(--color-background);
+}
+
+.headerBrandGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.menuButton,
+.settingsButton {
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-medium);
+  background: transparent;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.menuButton span,
+.menuButton span::before,
+.menuButton span::after {
+  width: 24px;
+  height: 3px;
+  display: block;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+.menuButton span {
+  position: relative;
+}
+
+.menuButton span::before,
+.menuButton span::after {
+  content: '';
+  position: absolute;
+  left: 0;
+}
+
+.menuButton span::before {
+  top: -7px;
+}
+
+.menuButton span::after {
+  top: 7px;
+}
+
+.brandButton {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.brandName {
+  color: var(--color-text-muted);
+  font-size: 1.28rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.brandName span {
+  color: transparent;
+  background: var(--brand-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.headerActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.apiStatus {
+  width: 1px;
+  height: 1px;
+  position: absolute;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+}
+
+.apiStatus.ready {
+  color: var(--color-cyan-strong);
+}
+
+.settingsArea {
+  position: relative;
+  z-index: 35;
+}
+
+.popoverBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.settingsIcon {
+  width: 30px;
+  height: 30px;
+  display: block;
+  object-fit: contain;
+}
+
+.menuButton:focus-visible,
+.settingsButton:focus-visible,
+.brandButton:focus-visible,
+.popoverBackdrop:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  .appHeader {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+}
+
+@media (max-width: 520px) {
+  .headerActions {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+}

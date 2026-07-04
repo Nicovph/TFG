@@ -1,0 +1,68 @@
+/* PreferencesPanel.module.css styles the user preference select controls. */
+
+.preferencesPanel {
+  width: min(420px, calc(100vw - 32px));
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 40;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+}
+
+.preferenceField {
+  display: grid;
+  gap: 8px;
+  padding: 8px 6px 0;
+  background: var(--color-cyan-soft);
+  color: var(--color-text-strong);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.preferenceLabel {
+  padding-left: 2px;
+  color: var(--color-text-strong);
+}
+
+.preferenceField select {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 48px 0 18px;
+  border: 2px solid var(--color-cyan);
+  border-radius: 0;
+  appearance: none;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--color-cyan) 50%) right 22px center / 9px 9px
+      no-repeat,
+    linear-gradient(135deg, var(--color-cyan) 50%, transparent 50%) right 14px center / 9px 9px
+      no-repeat,
+    var(--color-accent);
+  color: var(--color-background);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.preferenceField select option {
+  background: var(--color-cyan-soft);
+  color: var(--color-text-strong);
+}
+
+.preferenceField select:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  .preferencesPanel {
+    width: auto;
+    position: fixed;
+    top: 88px;
+    right: 16px;
+    left: 16px;
+  }
+}

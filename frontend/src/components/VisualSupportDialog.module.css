@@ -1,0 +1,61 @@
+/* VisualSupportDialog.module.css styles the accessible visual support modal dialog. */
+
+.visualSupportOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.visualSupportBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: var(--color-overlay);
+  cursor: pointer;
+}
+
+.visualSupportDialog {
+  width: min(320px, calc(100vw - 48px));
+  position: relative;
+  z-index: 1;
+  padding: 24px;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  border-radius: var(--radius-medium);
+  background: var(--color-background);
+  box-shadow: var(--shadow-dialog);
+}
+
+.closeButton {
+  justify-self: end;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: var(--color-accent-soft);
+  color: #6d54d8;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.visualSupportDialog img {
+  width: 128px;
+  height: 128px;
+  object-fit: contain;
+}
+
+.visualSupportDialog h2 {
+  margin: 0;
+  color: #287f8a;
+  font-size: 1.5rem;
+}
+
+.visualSupportBackdrop:focus-visible,
+.closeButton:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 3px;
+}
