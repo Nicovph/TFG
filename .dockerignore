@@ -1,0 +1,17 @@
+.env
+.secrets
+.git
+.github
+.gitignore
+.codex
+.agents
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+frontend/node_modules
+frontend/dist
+frontend/.vite/
+docs
+*.log
+AGENTS.md

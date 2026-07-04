@@ -1,6 +1,5 @@
 # Docker Compose file for the Traductor_TEA project.
-# Defines a single PostgreSQL container with secure secrets support,
-# persistent storage, and a local-only port mapping for development.
+# Defines PostgreSQL and Django services for local development.
 
 name: traductor-tea
 
@@ -62,6 +61,68 @@ services:
       # Allow PostgreSQL up to 10 seconds to start before health checks begin.
       start_period: 10s
 
+  backend:
+    build:
+      context: . # The context is the root of the project. In this way Dockerfilecan copy files from the root of the project.
+      dockerfile: docker/django/Dockerfile
+    init: true # Docker executs a little init process inside the container to manage correctly signals and child processes.
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DJANGO_DB_PROFILE: app
+      DJANGO_DB_APP_CREDENTIALS_FILE: /run/secrets/db_app_config
+      POSTGRES_DB: traductor_tea_db
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_CONN_MAX_AGE: "60"
+      POSTGRES_CONNECT_TIMEOUT: "5" # Maximum time that Django takes to try to connect to PostgreSQL.
+      POSTGRES_SSLMODE: disable
+    secrets:
+      - source: db_app_config
+        target: db_app_config
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck: # Checks periodically if Django is working.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=3)"
+        ]
+      # Executes the comprobation each 10 seconds.
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s # Give Django an initial 20 seconds of leeway before it starts penalizing healthcheck failures.
+
+  backend-migrate:
+    # This prevents the service from starting in a normal docker compose up.
+    profiles:
+      - migrate
+    build:
+      context: .
+      dockerfile: docker/django/Dockerfile
+    init: true
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "manage.py", "migrate"]
+    environment:
+      DJANGO_DB_PROFILE: migrate
+      DJANGO_DB_MIGRATE_CREDENTIALS_FILE: /run/secrets/db_migrate_config
+      POSTGRES_DB: traductor_tea_db
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_CONN_MAX_AGE: "0"
+      POSTGRES_CONNECT_TIMEOUT: "5"
+      POSTGRES_SSLMODE: disable
+    secrets:
+      - source: db_migrate_config
+        target: db_migrate_config
 
 secrets:
   postgres_admin_password:
