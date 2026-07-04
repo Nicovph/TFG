@@ -1,3 +1,3 @@
-from django.contrib import admin
+"""Reserved admin module for future preference administration."""
 
-# Register your models here.
+from django.contrib import admin

@@ -1,3 +1,5 @@
+"""Django application configuration for security audit events."""
+
 from django.apps import AppConfig
 
 

@@ -1,3 +1,5 @@
+"""Django application configuration for user preferences."""
+
 from django.apps import AppConfig
 
 

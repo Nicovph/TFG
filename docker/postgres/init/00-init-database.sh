@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Initializes PostgreSQL roles and privileges from Docker secrets.
 # Use /usr/bin/env to locate bash for greater portability across systems.
 
 set -Eeuo pipefail

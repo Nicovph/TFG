@@ -1,3 +1,5 @@
+"""Django application configuration for federated accounts."""
+
 from django.apps import AppConfig
 
 

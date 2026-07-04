@@ -1,3 +1,3 @@
-from django.shortcuts import render
+"""Reserved HTTP views module for future preference endpoints."""
 
-# Create your views here.
+from django.shortcuts import render
