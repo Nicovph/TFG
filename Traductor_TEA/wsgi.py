@@ -1,5 +1,5 @@
 """
-WSGI config for Tradcutor_TEA project.
+WSGI config for Traductor_TEA project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 
@@ -11,6 +11,6 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Tradcutor_TEA.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Traductor_TEA.settings')
 
 application = get_wsgi_application()
