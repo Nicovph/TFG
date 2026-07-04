@@ -1,3 +1,5 @@
+"""Django application configuration for interpretation features."""
+
 from django.apps import AppConfig
 
 
