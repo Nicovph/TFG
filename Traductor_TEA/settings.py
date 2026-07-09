@@ -212,14 +212,11 @@ profile_config = read_dotenv_file(
     DATABASE_PROFILES[DATABASE_PROFILE]["credentials_file"]
 )
 
-# Database configuration precedence:
-# 1. Real operating-system environment variables.
-# 2. Selected profile dotenv credentials.
-# 3. Common local configuration file.
-database_config: Mapping[str, str] = {
-    **common_config,
-    **profile_config,
-    **os.environ,
+aplication_config: Mapping[str, str] = { # Mapping of str key to str value.
+    **common_config, # Firstly inserts the common settings from .env file
+    **profile_config, # Secondly inserts the profile specific settings (app, migrate or test). If the same key exists in both,
+                      # the profile-specific value will override the common one.
+    **os.environ, # Finally inserts the environment variables of the operating system or the container. It has the highest priority.
 }
 
 
@@ -235,7 +232,7 @@ def get_required_setting(name: str) -> str:
     Raises:
         ImproperlyConfigured: If the setting is missing or empty.
     """
-    value = database_config.get(name)
+    value = aplication_config.get(name)
 
     if value is None or not str(value).strip():
         raise ImproperlyConfigured(
@@ -267,7 +264,7 @@ def get_integer_setting(
         ImproperlyConfigured: If the value cannot be parsed as an integer, or if
             it falls outside the minimum/maximum range.
     """
-    raw_value = database_config.get(name, str(default))
+    raw_value = aplication_config.get(name, str(default))
 
     try:
         value = int(raw_value)
@@ -287,6 +284,67 @@ def get_integer_setting(
         )
 
     return value
+
+
+def get_boolean_setting(name: str, *, default: bool) -> bool:
+    """Parse a boolean configuration setting from the environment.
+
+    Args:
+        name: The name of the configuration setting to retrieve.
+        default: The default value to use when the setting is not defined.
+
+    Returns:
+        The parsed boolean value.
+
+    Raises:
+        ImproperlyConfigured: If the configured value is not a recognized
+            boolean literal.
+    """
+    raw_value = aplication_config.get(name)
+
+    # If the setting is not defined or is empty.
+    if raw_value is None or not str(raw_value).strip():
+        return default
+
+    normalized_value = str(raw_value).strip().lower()
+
+    if normalized_value in {"1", "true", "yes", "on"}:
+        return True
+
+    if normalized_value in {"0", "false", "no", "off"}:
+        return False
+
+    # Django does not boot if a boolean setting is misconfigured.
+    raise ImproperlyConfigured(
+        f"Configuration setting {name} must be a boolean."
+    )
+
+
+def get_cookie_samesite_setting(name: str, *, default: str) -> str:
+    """Parse and validate a SameSite cookie setting.
+
+    Args:
+        name: The name of the configuration setting to retrieve.
+        default: The default SameSite value.
+
+    Returns:
+        A Django-compatible SameSite string.
+
+    Raises:
+        ImproperlyConfigured: If the configured value is not supported.
+    """
+    raw_value = aplication_config.get(name, default)
+    value = str(raw_value).strip()
+    allowed_values = {"Strict", "Lax", "None"}
+
+    for allowed_value in allowed_values:
+        if value.lower() == allowed_value.lower():
+            return allowed_value
+
+    raise ImproperlyConfigured(
+        f"Configuration setting {name} must be one of: "
+        + ", ".join(sorted(allowed_values))
+    )
 
 # Enforce that the selected profile uses the expected database user.
 database_user = get_required_setting("POSTGRES_USER")
@@ -329,7 +387,7 @@ allowed_ssl_modes = {
     "verify-full",
 }
 
-ssl_mode = database_config.get(
+ssl_mode = aplication_config.get(
     "POSTGRES_SSLMODE",
     "prefer",
 ).strip().lower()
@@ -400,3 +458,135 @@ STATIC_URL = 'static/'
 # Customized user
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
+
+
+# Session and CSRF cookie hardening for the browser-based OAuth/OIDC flow.
+SESSION_COOKIE_HTTPONLY = True # Activates the HttpOnly flag to prevent JavaScript access from the client to the session cookie.
+SESSION_COOKIE_SECURE = get_boolean_setting(
+    "DJANGO_SESSION_COOKIE_SECURE",
+    default=not DEBUG, # In production, the session cookie must be sent only over HTTPS (DEBUG=False).
+)
+SESSION_COOKIE_SAMESITE = get_cookie_samesite_setting(
+    "DJANGO_SESSION_COOKIE_SAMESITE",
+    default="Lax",
+)
+# Maximum session cookie lifetime in seconds.
+SESSION_COOKIE_AGE = get_integer_setting(
+    "DJANGO_SESSION_COOKIE_AGE",
+    default=3600,
+    minimum=300,
+    maximum=86400,
+)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = get_boolean_setting(
+    "DJANGO_SESSION_EXPIRE_AT_BROWSER_CLOSE",
+    default=True,
+)
+# If True, the session will be saved to the database on every request, even if it wasn't modified.
+# This is useful for implementing a rolling session expiration.
+SESSION_SAVE_EVERY_REQUEST = get_boolean_setting(
+    "DJANGO_SESSION_SAVE_EVERY_REQUEST",
+    default=True,
+)
+# The CSRF cookie is used to protect against CSRF attacks.
+CSRF_COOKIE_SECURE = get_boolean_setting(
+    "DJANGO_CSRF_COOKIE_SECURE",
+    default=not DEBUG,
+)
+CSRF_COOKIE_SAMESITE = get_cookie_samesite_setting(
+    "DJANGO_CSRF_COOKIE_SAMESITE",
+    default="Lax",
+)
+# Django does not boot if session cookie secure is false in production (DEBUG=False).
+if not DEBUG and not SESSION_COOKIE_SECURE:
+    raise ImproperlyConfigured(
+        "DJANGO_SESSION_COOKIE_SECURE must be enabled when DEBUG is False."
+    )
+
+if not DEBUG and not CSRF_COOKIE_SECURE:
+    raise ImproperlyConfigured(
+        "DJANGO_CSRF_COOKIE_SECURE must be enabled when DEBUG is False."
+    )
+
+if SESSION_COOKIE_SAMESITE == "None" and not SESSION_COOKIE_SECURE:
+    raise ImproperlyConfigured(
+        "SESSION_COOKIE_SECURE is required when SESSION_COOKIE_SAMESITE is None."
+    )
+
+if CSRF_COOKIE_SAMESITE == "None" and not CSRF_COOKIE_SECURE:
+    raise ImproperlyConfigured(
+        "CSRF_COOKIE_SECURE is required when CSRF_COOKIE_SAMESITE is None."
+    )
+
+# Avoid leaking OAuth/OIDC callback query parameters through outbound referrers.
+SECURE_REFERRER_POLICY = "same-origin" # The referrer (callback with code and state) will only be sent to the same origin.
+
+
+# Google OpenID Connect configuration. The sensitive values are optional at
+# process start so local commands can run without real provider credentials.
+GOOGLE_OIDC_CLIENT_ID = aplication_config.get(
+    "GOOGLE_OIDC_CLIENT_ID",
+    "",
+).strip()
+GOOGLE_OIDC_CLIENT_SECRET = aplication_config.get(
+    "GOOGLE_OIDC_CLIENT_SECRET",
+    "",
+).strip()
+# It must match an authorized URI in the Cloud Console.
+GOOGLE_OIDC_REDIRECT_URI = aplication_config.get(
+    "GOOGLE_OIDC_REDIRECT_URI",
+    "",
+).strip()
+# URL to which the backend will redirect the user to initiate the login process.
+GOOGLE_OIDC_AUTHORIZATION_ENDPOINT = (
+    "https://accounts.google.com/o/oauth2/v2/auth"
+)
+GOOGLE_OIDC_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+# Triggers OpenID Connect authentication to verify user identity and retrieve an ID Token.
+# Guarantees the return of the sub.
+GOOGLE_OIDC_SCOPES = ("openid",)
+GOOGLE_OIDC_ISSUERS = (
+    "https://accounts.google.com",
+    "accounts.google.com",
+)
+# Accepted signature algorithms for ID Tokens.
+GOOGLE_OIDC_ALLOWED_ALGORITHMS = ("RS256",)
+# Define how long the temporary state of the OIDC flow (state, nonce, code_verifier, etc.) can persist.
+GOOGLE_OIDC_AUTH_FLOW_TTL_SECONDS = get_integer_setting(
+    "GOOGLE_OIDC_AUTH_FLOW_TTL_SECONDS",
+    default=300,
+    minimum=60,
+    maximum=900,
+)
+# Cache alias used for temporary Google OIDC flow metadata.
+# If variable does not exist, the default cache will be used; if exists, but has None, "", 0, False..., `or default` forces the default cache;
+# finnally, if after .strip() the string is empty, it is forced the default cache.
+GOOGLE_OIDC_FLOW_CACHE_ALIAS = (
+    str(
+        aplication_config.get("GOOGLE_OIDC_FLOW_CACHE_ALIAS", "default")
+        or "default"
+    )
+    .strip()
+    or "default"
+)
+# In production, the OIDC flow cache must be shared across workers/containers.
+# It is needed because a worker could receive the callback request from Google that was initiated by a different worker (it would fail the authentication).
+# In development, a local in-memory cache is sufficient.
+GOOGLE_OIDC_REQUIRE_SHARED_FLOW_CACHE = get_boolean_setting(
+    "GOOGLE_OIDC_REQUIRE_SHARED_FLOW_CACHE",
+    default=not DEBUG,
+)
+# Timeout for requests to the provider.
+GOOGLE_OIDC_TIMEOUT_SECONDS = get_integer_setting(
+    "GOOGLE_OIDC_TIMEOUT_SECONDS",
+    default=5,
+    minimum=1,
+    maximum=30,
+)
+# Defines the maximum clock skew tolerated when validating the iat to accommodate minor time differences
+# between Google and the server.
+GOOGLE_OIDC_MAX_IAT_SKEW_SECONDS = get_integer_setting(
+    "GOOGLE_OIDC_MAX_IAT_SKEW_SECONDS",
+    default=300,
+    minimum=0,
+    maximum=900,
+)

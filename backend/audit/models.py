@@ -47,8 +47,9 @@ def pseudonymize_ip_address(ip_address: str, *, key: bytes) -> str:
         hashlib.sha256,
     ).hexdigest() # Converts the binary hash to a hexadecimal string.
 
-class SecurityEventQuerySet(models.QuerySet): # To avoid errors like: SecurityEvent.objects.filter(...).update(...) o
-                                              # SecurityEvents.objects.filter(...).delete()
+# To avoid errors like: SecurityEvent.objects.filter(...).update(...) o
+# SecurityEvents.objects.filter(...).delete()
+class SecurityEventQuerySet(models.QuerySet):
     """QuerySet that blocks bulk mutation of audit events."""
 
     def update(self, **kwargs: object) -> int:
@@ -107,8 +108,8 @@ class SecurityEventManager(models.Manager.from_queryset(SecurityEventQuerySet)):
         event.save(force_insert=True)
         return event
 
+# Predefined audit event categories used for filtering and reporting.
 class SecurityEventType(models.TextChoices):
-    # Predefined audit event categories used for filtering and reporting.
     ACCOUNT_CREATED = "account_created", "Cuenta creada"
     ACCOUNT_SECURITY_UPDATED = "account_updated", "Estado de seguridad de la cuenta actualizado"
     LOGIN_SUCCEEDED = "login_succeeded", "Inicio de sesión exitoso"
