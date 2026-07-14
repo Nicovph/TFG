@@ -3,7 +3,7 @@
  * view to focused components.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { SubmitEvent } from 'react'
 import logoMark from './assets/Cerebro_logo_app.png'
 import { getMockInterpretation } from './api'
@@ -12,17 +12,27 @@ import { Drawer } from './components/Drawer'
 import { HomeView } from './components/HomeView'
 import { InfoView } from './components/InfoView'
 import { InterpretationWorkspace } from './components/InterpretationWorkspace'
+import { StatusView } from './components/StatusView'
 import { VisualSupportDialog } from './components/VisualSupportDialog'
 import { INFO_PAGES, isInfoView } from './data/infoPages'
 import type { AppView } from './data/infoPages'
 import { DEFAULT_PREFERENCES } from './data/preferences'
 import type { PreferenceChangeHandler, PreferenceState } from './data/preferences'
+import { useAuthSession } from './hooks/useAuthSession'
 import { useApiHealth } from './hooks/useApiHealth'
 import type { MockInterpretation } from './types'
 
 const MAX_MESSAGE_LENGTH = 500
 const VIEW_STORAGE_KEY = 'teaslator.currentView'
+// Use to remember if an info page must return to home or main.
 const INFO_RETURN_STORAGE_KEY = 'teaslator.infoReturnView'
+/** It serves to indicate that the user of the current tab voluntarily initiated
+ * a Google authentication flow, allowing the marker to persist through the temporary
+ * departure to Google and the return to the same tab, while preventing it from persisting
+ * indefinitely.
+ */
+const AUTH_ATTEMPT_STORAGE_KEY = 'teaslator.authAttemptPending'
+const AUTH_ERROR_FRAGMENT = '#auth-error'
 
 /**
  * Check whether a stored string matches a valid application view.
@@ -74,6 +84,53 @@ function getStoredInfoReturnView(): 'home' | 'main' {
 }
 
 /**
+ * Remove the generic authentication error marker (#auth-error) from the browser URL.
+ * Prevents the user from seeing #auth-error in the address bar after viewing the message.
+ */
+function clearAuthErrorFragment(): void {
+  /**
+   * If the window type is undefined or the hash (string containing '#' follow by the fragment identifier of the location URL) is not #auth-error.
+   */
+  if (typeof window === 'undefined' || window.location.hash !== AUTH_ERROR_FRAGMENT) {
+    return
+  }
+
+  /**
+   * history.replaceState is an API to modify the current URL without reload the page and without adding a new entrance in the browser history.
+   * null: The history status is not modified.
+   * document.title: Mantain the page title.
+   * The last argument rebuilds the URL without the hash.
+   */
+  window.history.replaceState(
+    null,
+    document.title,
+    `${window.location.pathname}${window.location.search}`,
+  )
+}
+
+/**
+ * Check for an authentication error produced by a user-initiated flow.
+ *
+ * Returns:
+ *   True only when the URL error marker and the local attempt marker are both present
+ * (there was a recent error).
+ * This prevents the error message from appearing when the user reloads the page or accesses a URL with #auth-error.
+ */
+function hasAuthFlowError(): boolean {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  /**
+   * Only return True if there is an error in the URL and there was a pending authentication attempt.
+   */
+  return (
+    window.location.hash === AUTH_ERROR_FRAGMENT &&
+    window.sessionStorage.getItem(AUTH_ATTEMPT_STORAGE_KEY) === 'true'
+  )
+}
+
+/**
  * Render the TEAslator single-page interface and keep transient UI state local.
  *
  * Returns:
@@ -85,6 +142,9 @@ function App() {
   const [infoReturnView, setInfoReturnView] = useState<'home' | 'main'>(() =>
     getStoredInfoReturnView(),
   )
+  /**
+   * It keeps the message in React memory only, due to the use of the useState hook.
+   */
   const [message, setMessage] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -95,13 +155,50 @@ function App() {
   const [interpretationStatus, setInterpretationStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle')
+  const [authFlowError, setAuthFlowError] = useState(hasAuthFlowError)
+  // These references restore focus only after returning from an informational page.
+  const homeMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const workspaceMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const pendingInfoReturnFocusRef = useRef<'home' | 'main' | null>(null)
+  const {
+    authStatus,
+    clearLogoutError,
+    logout,
+    logoutStatus,
+    retrySessionCheck,
+    startGoogleLogin,
+  } = useAuthSession()
   const { apiReady, apiStatusText } = useApiHealth()
 
   const remainingCharacters = MAX_MESSAGE_LENGTH - message.length
   const canSubmit = message.trim().length > 0 && interpretationStatus !== 'loading'
-  const infoPage = isInfoView(currentView) ? INFO_PAGES[currentView] : null
+  const renderedView: AppView =
+    authStatus === 'authenticated' && currentView === 'home'
+      ? 'main'
+      : authStatus !== 'authenticated' && currentView === 'main'
+        ? 'home'
+        : currentView
+
+  /**
+   * The user returns to the page stored in infoReturnView, unless they attempt to 
+   * return to "home" from "main" or vice versa.
+   */
+  const resolvedInfoReturnView: 'home' | 'main' =
+    authStatus === 'authenticated' && infoReturnView === 'home'
+      ? 'main'
+      : authStatus !== 'authenticated' && infoReturnView === 'main'
+        ? 'home'
+        : infoReturnView
+  const infoReturnLabel =
+    resolvedInfoReturnView === 'main'
+      ? 'Volver al área de interpretación'
+      : 'Volver a la página de inicio'
+  const infoPage = isInfoView(renderedView) ? INFO_PAGES[renderedView] : null
   const showVisualSupport = preferences.visualSupport === 'enabled' && interpretation !== null
 
+  /**
+   * Updates the storage whenever the view changes.
+   */
   useEffect(() => {
     window.sessionStorage.setItem(VIEW_STORAGE_KEY, currentView)
   }, [currentView])
@@ -110,8 +207,43 @@ function App() {
     window.sessionStorage.setItem(INFO_RETURN_STORAGE_KEY, infoReturnView)
   }, [infoReturnView])
 
+  useEffect(() => {
+    const pendingDestination = pendingInfoReturnFocusRef.current
+
+    if (!pendingDestination || renderedView !== pendingDestination) {
+      return
+    }
+
+    const focusTarget =
+      pendingDestination === 'main' ? workspaceMenuButtonRef.current : homeMenuButtonRef.current
+
+    if (focusTarget) {
+      focusTarget.focus()
+      pendingInfoReturnFocusRef.current = null
+    }
+  }, [renderedView])
+
+  useEffect(() => {
+    if (window.location.hash !== AUTH_ERROR_FRAGMENT) {
+      return
+    }
+
+    window.sessionStorage.removeItem(AUTH_ATTEMPT_STORAGE_KEY)
+    clearAuthErrorFragment()
+  }, [])
+
+  /**
+   * Prevents the mark from persisting after the check is resolved.
+   */
+  useEffect(() => {
+    if (authStatus !== 'checking') {
+      window.sessionStorage.removeItem(AUTH_ATTEMPT_STORAGE_KEY)
+    }
+  }, [authStatus])
+
   /**
    * Close overlays and popovers that should not survive navigation.
+   * Prevents floating elements from persisting when switching views.
    */
   const closeTransientPanels = () => {
     setMenuOpen(false)
@@ -129,20 +261,41 @@ function App() {
   const handleNavigate = (nextView: AppView) => {
     closeTransientPanels()
 
-    if (isInfoView(nextView) && !isInfoView(currentView)) {
-      setInfoReturnView(currentView === 'main' ? 'main' : 'home')
+    if (nextView === 'main' && authStatus !== 'authenticated') {
+      setInfoReturnView('home')
+      setCurrentView('home')
+      return
+    }
+
+    if (isInfoView(nextView) && !isInfoView(renderedView)) {
+      setInfoReturnView(renderedView === 'main' ? 'main' : 'home')
     }
 
     setCurrentView(nextView)
   }
 
   /**
-   * Enter the main workspace after the placeholder Google sign-in action.
+   * Return from an informational page and restore focus in the rendered destination.
+   *
+   * Args:
+   *   None.
+   *
+   * Returns:
+   *   Nothing.
+   */
+  const handleInfoReturn = () => {
+    pendingInfoReturnFocusRef.current = resolvedInfoReturnView
+    handleNavigate(resolvedInfoReturnView)
+  }
+
+  /**
+   * Start the backend-managed Google authentication flow.
    */
   const handleGoogleEntry = () => {
     closeTransientPanels()
-    setInfoReturnView('main')
-    setCurrentView('main')
+    setAuthFlowError(false)
+    window.sessionStorage.setItem(AUTH_ATTEMPT_STORAGE_KEY, 'true')
+    startGoogleLogin()
   }
 
   /**
@@ -181,15 +334,47 @@ function App() {
   /**
    * Return to the start screen and clear transient user-entered state.
    */
-  const handleLogout = () => {
+  const clearLocalSessionState = () => {
     closeTransientPanels()
     window.sessionStorage.removeItem(VIEW_STORAGE_KEY)
     window.sessionStorage.removeItem(INFO_RETURN_STORAGE_KEY)
+    window.sessionStorage.removeItem(AUTH_ATTEMPT_STORAGE_KEY)
+    setAuthFlowError(false)
     setMessage('')
     setInterpretation(null)
     setInterpretationStatus('idle')
+    setPreferences(DEFAULT_PREFERENCES)
     setInfoReturnView('home')
     setCurrentView('home')
+  }
+
+  /**
+   * Request backend logout and clear transient user-entered state on success.
+   */
+  const handleLogout = () => {
+    logout()
+      .then(() => {
+        clearLocalSessionState()
+      })
+      .catch(() => {
+        return undefined
+      })
+  }
+
+  /**
+   * Leave a recoverable authentication error and return to the start screen.
+   */
+  const handleReturnHomeFromAuthError = () => {
+    setAuthFlowError(false)
+    clearLocalSessionState()
+  }
+
+  /**
+   * Leave a recoverable logout error and keep the authenticated workspace visible.
+   */
+  const handleReturnToWorkspaceFromLogoutError = () => {
+    clearLogoutError()
+    closeTransientPanels()
   }
 
   /**
@@ -247,61 +432,117 @@ function App() {
       })
   }
 
+  if (authFlowError) {
+    return (
+      <StatusView
+        logoSrc={logoMark}
+        message="No se pudo completar el inicio de sesión. Vuelve a intentarlo más tarde."
+        mode="error"
+        primaryAction={{ label: 'Intentar de nuevo', onClick: handleGoogleEntry }}
+        secondaryAction={{ label: 'Volver al inicio', onClick: handleReturnHomeFromAuthError }}
+        title="No pudimos iniciar sesión"
+      />
+    )
+  }
+
+  if (authStatus === 'checking') {
+    return (
+      <StatusView
+        logoSrc={logoMark}
+        message="Estamos comprobando tu sesión de forma segura."
+        mode="loading"
+        title="Un momento"
+      />
+    )
+  }
+
+  if (authStatus === 'error') {
+    return (
+      <StatusView
+        logoSrc={logoMark}
+        message="No se pudo comprobar tu sesión. Inténtalo de nuevo."
+        mode="error"
+        primaryAction={{ label: 'Reintentar', onClick: retrySessionCheck }}
+        title="No pudimos comprobar tu sesión"
+      />
+    )
+  }
+
+  if (logoutStatus === 'error') {
+    return (
+      <StatusView
+        logoSrc={logoMark}
+        message="No pudimos cerrar la sesión desde aquí. Puedes reintentarlo sin perder lo que ves en pantalla."
+        mode="error"
+        primaryAction={{ label: 'Reintentar cierre', onClick: handleLogout }}
+        secondaryAction={{ label: 'Volver', onClick: handleReturnToWorkspaceFromLogoutError }}
+        title="No se cerró la sesión"
+      />
+    )
+  }
+
   return (
     <>
-      <Drawer open={menuOpen} onClose={closeTransientPanels} onNavigate={handleNavigate} />
-
-      {currentView === 'home' ? (
-        <HomeView
-          logoSrc={logoMark}
-          menuOpen={menuOpen}
-          onGoogleEntry={handleGoogleEntry}
-          onMenuToggle={handleMenuToggle}
-        />
-      ) : null}
-
-      {infoPage ? (
-        <InfoView
-          infoPage={infoPage}
-          logoSrc={logoMark}
-          menuOpen={menuOpen}
-          onReturn={() => handleNavigate(infoReturnView)}
-          onMenuToggle={handleMenuToggle}
-        />
-      ) : null}
-
-      {currentView === 'main' ? (
-        <main>
-          <AppHeader
-            accountOpen={accountOpen}
-            apiReady={apiReady}
-            apiStatusText={apiStatusText}
-            menuOpen={menuOpen}
-            preferences={preferences}
-            settingsOpen={settingsOpen}
-            onAccountToggle={handleAccountToggle}
-            onClosePopovers={closePopovers}
-            onLogout={handleLogout}
-            onMenuToggle={handleMenuToggle}
-            onNavigateHome={() => handleNavigate('main')}
-            onPreferenceChange={handlePreferenceChange}
-            onSettingsToggle={handleSettingsToggle}
-          />
-          <InterpretationWorkspace
-            canSubmit={canSubmit}
-            interpretation={interpretation}
-            interpretationStatus={interpretationStatus}
+      {/* Keep every normal view in one inert subtree while the modal drawer is open. */}
+      <div id="app-content" inert={menuOpen}>
+        {renderedView === 'home' ? (
+          <HomeView
             logoSrc={logoMark}
-            maxMessageLength={MAX_MESSAGE_LENGTH}
-            message={message}
-            remainingCharacters={remainingCharacters}
-            showVisualSupport={showVisualSupport}
-            onVisualSupportOpen={setSelectedVisualLabel}
-            onMessageChange={handleMessageChange}
-            onSubmit={handleSubmit}
+            menuButtonRef={homeMenuButtonRef}
+            menuOpen={menuOpen}
+            onGoogleEntry={handleGoogleEntry}
+            onMenuToggle={handleMenuToggle}
           />
-        </main>
-      ) : null}
+        ) : null}
+
+        {infoPage ? (
+          <InfoView
+            infoPage={infoPage}
+            logoSrc={logoMark}
+            menuOpen={menuOpen}
+            onReturn={handleInfoReturn}
+            onMenuToggle={handleMenuToggle}
+            returnLabel={infoReturnLabel}
+          />
+        ) : null}
+
+        {renderedView === 'main' ? (
+          <main>
+            <AppHeader
+              accountOpen={accountOpen}
+              apiReady={apiReady}
+              apiStatusText={apiStatusText}
+              logoutStatus={logoutStatus}
+              menuButtonRef={workspaceMenuButtonRef}
+              menuOpen={menuOpen}
+              preferences={preferences}
+              settingsOpen={settingsOpen}
+              onAccountToggle={handleAccountToggle}
+              onClosePopovers={closePopovers}
+              onLogout={handleLogout}
+              onMenuToggle={handleMenuToggle}
+              onNavigateWorkspace={() => handleNavigate('main')}
+              onPreferenceChange={handlePreferenceChange}
+              onSettingsToggle={handleSettingsToggle}
+            />
+            <InterpretationWorkspace
+              canSubmit={canSubmit}
+              interpretation={interpretation}
+              interpretationStatus={interpretationStatus}
+              logoSrc={logoMark}
+              maxMessageLength={MAX_MESSAGE_LENGTH}
+              message={message}
+              remainingCharacters={remainingCharacters}
+              showVisualSupport={showVisualSupport}
+              onVisualSupportOpen={setSelectedVisualLabel}
+              onMessageChange={handleMessageChange}
+              onSubmit={handleSubmit}
+            />
+          </main>
+        ) : null}
+      </div>
+
+      <Drawer open={menuOpen} onClose={closeTransientPanels} onNavigate={handleNavigate} />
 
       {selectedVisualLabel ? (
         <VisualSupportDialog

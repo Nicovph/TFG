@@ -12,7 +12,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
+        changeOrigin: false, // Preserve the browser-visible Host (localhost:5173) header so Django origin and CSRF checks remain consistent.
       },
     },
   },

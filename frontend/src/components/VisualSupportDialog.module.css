@@ -1,14 +1,16 @@
 /* VisualSupportDialog.module.css styles the accessible visual support modal dialog. */
 
+/* Center the modal above the application while preserving safe viewport padding. */
 .visualSupportOverlay {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: var(--z-dialog);
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: var(--space-lg);
 }
 
+/* The backdrop blocks background interaction and acts as a dismiss target. */
 .visualSupportBackdrop {
   position: absolute;
   inset: 0;
@@ -17,31 +19,34 @@
   cursor: pointer;
 }
 
+/* Keep dialog content above the backdrop within the overlay stacking context. */
 .visualSupportDialog {
   width: min(320px, calc(100vw - 48px));
   position: relative;
   z-index: 1;
-  padding: 24px;
+  padding: var(--space-lg);
   display: grid;
   justify-items: center;
   gap: 14px;
   border-radius: var(--radius-medium);
-  background: var(--color-background);
-  box-shadow: var(--shadow-dialog);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-modal);
 }
 
+/* Place the explicit close action at the dialog's trailing edge. */
 .closeButton {
   justify-self: end;
   min-height: 34px;
   padding: 0 14px;
   border: 0;
   border-radius: var(--radius-small);
-  background: var(--color-accent-soft);
-  color: #6d54d8;
+  background: var(--color-action-soft);
+  color: var(--color-action-contrast);
   font-weight: 800;
   cursor: pointer;
 }
 
+/* Preserve predictable media dimensions as visual-support content changes. */
 .visualSupportDialog img {
   width: 128px;
   height: 128px;
@@ -50,12 +55,13 @@
 
 .visualSupportDialog h2 {
   margin: 0;
-  color: #287f8a;
+  color: var(--color-support-deep);
   font-size: 1.5rem;
 }
 
+/* Both modal dismissal paths retain a visible keyboard focus indicator. */
 .visualSupportBackdrop:focus-visible,
 .closeButton:focus-visible {
   outline: var(--focus-outline);
-  outline-offset: 3px;
+  outline-offset: var(--focus-outline-offset);
 }

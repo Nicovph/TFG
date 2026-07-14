@@ -3,18 +3,26 @@
  * preferences and account popovers.
  */
 
+import type { Ref } from 'react'
 import { AccountMenu } from './AccountMenu'
-import { MAIN_DRAWER_ID } from './Drawer'
 import styles from './AppHeader.module.css'
+import { MenuButton } from './MenuButton'
 import { PreferencesPanel, SETTINGS_PANEL_ID } from './PreferencesPanel'
+import { Tooltip } from './Tooltip'
+import visuallyHiddenStyles from './VisuallyHidden.module.css'
 import settingsIcon from '../assets/engranaje_configuraciones.png'
 import type { PreferenceChangeHandler, PreferenceState } from '../data/preferences'
-// import type is used to import only the type definitions used in compile time for typing.
+import type { LogoutStatus } from '../hooks/useAuthSession'
+/**
+ * import type is used to import only the type definitions used in compile time for typing.
+ */
 
 interface AppHeaderProps {
   accountOpen: boolean
   apiReady: boolean
   apiStatusText: string
+  logoutStatus: LogoutStatus
+  menuButtonRef: Ref<HTMLButtonElement>
   menuOpen: boolean // If the drawer is opened.
   preferences: PreferenceState
   settingsOpen: boolean
@@ -22,13 +30,13 @@ interface AppHeaderProps {
   onClosePopovers: () => void
   onLogout: () => void
   onMenuToggle: () => void
-  onNavigateHome: () => void
+  onNavigateWorkspace: () => void
   onPreferenceChange: PreferenceChangeHandler
   onSettingsToggle: () => void
 }
 
 /**
- * Render the main app header with menu, brand, settings, and account controls.
+ * Render the main app header with menu, brand, settings and account controls.
  *
  * Args:
  *   props: Header state and callbacks managed by the root app component.
@@ -40,6 +48,8 @@ export function AppHeader({
   accountOpen,
   apiReady,
   apiStatusText,
+  logoutStatus,
+  menuButtonRef,
   menuOpen,
   preferences,
   settingsOpen,
@@ -47,7 +57,7 @@ export function AppHeader({
   onClosePopovers,
   onLogout,
   onMenuToggle,
-  onNavigateHome,
+  onNavigateWorkspace,
   onPreferenceChange,
   onSettingsToggle,
 }: AppHeaderProps) {
@@ -57,29 +67,20 @@ export function AppHeader({
         <button
           className={styles.popoverBackdrop}
           type="button"
+          tabIndex={-1}
           aria-label="Cerrar panel"
           onClick={onClosePopovers}
         ></button>
       ) : null}
 
       <div className={styles.headerBrandGroup}>
-        <button
-          className={styles.menuButton}
-          type="button"
-          aria-label="Abrir menú"
-          aria-expanded={menuOpen}
-          aria-controls={MAIN_DRAWER_ID}
-          aria-haspopup="dialog"
-          onClick={onMenuToggle}
-        >
-          <span aria-hidden="true"></span>
-        </button>
+        <MenuButton buttonRef={menuButtonRef} menuOpen={menuOpen} onToggle={onMenuToggle} />
 
         <button
           className={styles.brandButton}
           type="button"
-          aria-label="Volver al inicio"
-          onClick={onNavigateHome}
+          aria-label="TEAslator: volver al área principal"
+          onClick={onNavigateWorkspace}
         >
           <span className={styles.brandName}>
             <span>TEA</span>slator
@@ -88,34 +89,54 @@ export function AppHeader({
       </div>
 
       <div className={styles.headerActions}>
-        {/* // Permits screen readers to announce changes in the API status text without an agresive interrumption. */}
+        {/**
+         * The status role announces API availability changes without interrupting the user.
+        */}
         <span
-          className={apiReady ? `${styles.apiStatus} ${styles.ready}` : styles.apiStatus}
-          aria-live="polite"
+          className={
+            apiReady
+              ? `${visuallyHiddenStyles.visuallyHidden} ${styles.ready}`
+              : visuallyHiddenStyles.visuallyHidden
+          }
+          role="status"
         >
           {apiStatusText}
         </span>
-        {/* // Preferences container. */}
+        {/**
+         * Preferences container.
+         */}
         <div className={styles.settingsArea}>
-          {/* // Indicates that the button controls a dialog popup. */}
-          <button
-            className={styles.settingsButton}
-            type="button"
-            aria-label="Ajustes"
-            aria-expanded={settingsOpen}
-            aria-controls={SETTINGS_PANEL_ID}
-            aria-haspopup="dialog"
-            onClick={onSettingsToggle}
-          >
-            <img className={styles.settingsIcon} src={settingsIcon} width="30" height="30" alt="" />
-          </button>
+          {/** The settings button controls a non-modal disclosure panel. */}
+          <Tooltip align="end" label="Ajustes">
+            <button
+              className={styles.settingsButton}
+              type="button"
+              aria-label="Ajustes"
+              aria-expanded={settingsOpen}
+              aria-controls={settingsOpen ? SETTINGS_PANEL_ID : undefined}
+              onClick={onSettingsToggle}
+            >
+              <img
+                className={styles.settingsIcon}
+                src={settingsIcon}
+                width="30"
+                height="30"
+                alt=""
+              />
+            </button>
+          </Tooltip>
           <PreferencesPanel
             open={settingsOpen}
             preferences={preferences}
             onPreferenceChange={onPreferenceChange}
           />
         </div>
-        <AccountMenu open={accountOpen} onAccountToggle={onAccountToggle} onLogout={onLogout} />
+        <AccountMenu
+          logoutStatus={logoutStatus}
+          open={accountOpen}
+          onAccountToggle={onAccountToggle}
+          onLogout={onLogout}
+        />
       </div>
     </header>
   )

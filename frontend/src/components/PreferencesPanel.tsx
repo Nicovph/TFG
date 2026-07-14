@@ -41,7 +41,6 @@ export function PreferencesPanel({
     <section
       className={styles.preferencesPanel}
       id={SETTINGS_PANEL_ID}
-      role="dialog"
       aria-label="Preferencias"
     >
       {PREFERENCE_GROUPS.map((group) => (

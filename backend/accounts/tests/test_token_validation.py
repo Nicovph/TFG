@@ -35,6 +35,7 @@ class GoogleOIDCTokenValidationTests(TestCase):
         Raises:
             AssertionError: If the claims are accepted unexpectedly.
         """
+        # The return value are the claims that are passed as an argument to the function.
         with mock.patch(
             "backend.accounts.services.token_validation.verify_google_id_token_signature",
             return_value=claims,

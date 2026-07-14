@@ -1,24 +1,28 @@
 /* InterpretationWorkspace.module.css styles the message input and result area. */
 
+/* Constrain the workspace to a readable desktop width with stable page gutters. */
 .workspace {
-  width: min(980px, calc(100% - 40px));
+  width: min(980px, calc(100% - var(--page-content-gutter)));
   margin: 0 auto;
   padding: 6px 0 72px;
 }
 
+/* The centered mark separates the application header from the working area. */
 .workspaceMark {
   display: block;
-  width: 92px;
-  height: 92px;
+  width: var(--brand-logo-size);
+  height: var(--brand-logo-size);
   margin: 0 auto 28px;
   object-fit: contain;
 }
 
+/* Form sections use grid spacing as result content changes. */
 .messageForm {
   display: grid;
-  gap: 16px;
+  gap: var(--space-md);
 }
 
+/* Mode controls wrap instead of overflowing when additional modes are introduced. */
 .modeControls {
   display: flex;
   flex-wrap: wrap;
@@ -31,18 +35,18 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-xs);
   padding: 0 14px;
-  border: 1.5px solid var(--color-accent);
+  border: var(--border-width-control) solid var(--color-action-primary);
   border-radius: var(--radius-pill);
-  background: var(--color-background);
-  color: var(--color-accent);
+  background: var(--color-surface);
+  color: var(--color-action-primary);
   font-weight: 800;
   cursor: pointer;
 }
 
 .modeButton.active {
-  background: var(--color-accent-soft);
+  background: var(--color-action-soft);
 }
 
 .textModeIcon {
@@ -54,12 +58,14 @@
   font-size: 0.62em;
 }
 
+/* Maintain equal columns without allowing content to force horizontal overflow. */
 .workGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 8px;
+  gap: var(--space-xs);
 }
 
+/* Establish a positioning context for the character counter. */
 .inputPanel {
   position: relative;
 }
@@ -73,25 +79,27 @@
   font: inherit;
 }
 
+/* Allow vertical resizing while reserving space for the character counter. */
 .inputPanel textarea {
   resize: vertical;
-  padding: 16px 18px 36px;
-  border: 1.5px solid var(--color-cyan);
-  color: #404047;
-  background: var(--color-background);
+  padding: var(--space-md) 18px 36px;
+  border: var(--border-width-control) solid var(--color-support);
+  color: var(--color-text-input);
+  background: var(--color-surface);
 }
 
 .inputPanel textarea::placeholder,
 .resultPanel > p {
-  color: var(--color-placeholder);
+  color: var(--color-text-placeholder);
 }
 
 .resultPanel > p {
   margin: 0;
 }
 
+/* Focus remains visible without changing the input dimensions. */
 .inputPanel textarea:focus {
-  outline: 3px solid rgba(84, 212, 227, 0.26);
+  outline: var(--border-width-strong) solid var(--color-focus-soft);
   outline-offset: 2px;
 }
 
@@ -99,19 +107,20 @@
   position: absolute;
   right: 14px;
   bottom: 10px;
-  color: #81818c;
+  color: var(--color-text-secondary);
   font-size: 0.76rem;
 }
 
+/* The result surface mirrors the input to support side-by-side comparison. */
 .resultPanel {
-  padding: 16px 18px;
-  border: 1.5px solid var(--color-cyan-soft);
-  background: var(--color-cyan-soft);
+  padding: var(--space-md) 18px;
+  border: var(--border-width-control) solid var(--color-support-soft);
+  background: var(--color-support-soft);
 }
 
 .resultContent {
   display: grid;
-  gap: 12px;
+  gap: var(--space-sm);
 }
 
 .resultContent p,
@@ -123,10 +132,11 @@
   padding-left: 20px;
 }
 
+/* Visual concept actions wrap as result vocabulary grows. */
 .conceptList {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-xs);
 }
 
 .conceptList button {
@@ -134,8 +144,8 @@
   padding: 0 10px;
   border: 0;
   border-radius: var(--radius-pill);
-  background: var(--color-background);
-  color: #287f8a;
+  background: var(--color-surface);
+  color: var(--color-support-deep);
   font: inherit;
   font-size: 0.84rem;
   cursor: pointer;
@@ -148,37 +158,27 @@
   padding: 0 18px;
   border: 0;
   border-radius: var(--radius-large);
-  background: var(--color-accent-strong);
-  color: var(--color-background);
+  background: var(--color-action-filled);
+  color: var(--color-text-on-accent);
   font-weight: 800;
   cursor: pointer;
 }
 
+/* Disabled submission remains visibly and behaviorally distinct. */
 .submitButton:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
 
-.srOnly {
-  width: 1px;
-  height: 1px;
-  position: absolute;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
-  margin: -1px;
-  padding: 0;
-  border: 0;
-}
-
+/* Interactive workspace controls share one keyboard focus treatment. */
 .modeButton:focus-visible,
 .conceptList button:focus-visible,
 .submitButton:focus-visible {
   outline: var(--focus-outline);
-  outline-offset: 3px;
+  outline-offset: var(--focus-outline-offset);
 }
 
+/* Collapse the comparison grid into one reading order on smaller screens. */
 @media (max-width: 760px) {
   .workspace {
     width: calc(100% - 52px);

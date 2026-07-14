@@ -1,0 +1,49 @@
+/* MenuButton.module.css styles the shared control that opens or closes the main drawer. */
+
+/* Keep one stable touch target across every view that exposes the main drawer. */
+.button {
+  width: var(--icon-control-size);
+  height: var(--icon-control-size);
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-medium);
+  background: transparent;
+  color: var(--color-action-primary);
+  cursor: pointer;
+}
+
+/* Build the menu glyph from one element and two pseudo-elements. */
+.button span,
+.button span::before,
+.button span::after {
+  width: 24px;
+  height: 3px;
+  display: block;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+.button span {
+  position: relative;
+}
+
+.button span::before,
+.button span::after {
+  content: '';
+  position: absolute;
+  left: 0;
+}
+
+.button span::before {
+  top: -7px;
+}
+
+.button span::after {
+  top: 7px;
+}
+
+.button:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}

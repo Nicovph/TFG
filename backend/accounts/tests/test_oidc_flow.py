@@ -3,6 +3,7 @@
 from unittest import mock
 from urllib.parse import parse_qs, urlparse
 
+from django.conf import settings
 from django.core.cache import cache, caches
 # override_setings allows temporarily changing the value of one or more Django project settings during 
 # the execution of a unit test, automatically restoring the original values ​​once the test is complete
@@ -125,6 +126,34 @@ class GoogleOIDCFlowTests(TestCase):
                 },
             )
 
+    def _assert_frontend_redirect(
+        self,
+        response: object,
+        *,
+        authentication_failed: bool,
+    ) -> None:
+        """Assert that a callback redirects to React without sensitive values.
+
+        Args:
+            self: The test case instance.
+            response: The Django test client response to inspect.
+            authentication_failed: Whether the redirect should carry the
+            generic non-sensitive error fragment.
+        """
+        frontend_return_url = settings.FRONTEND_AUTH_RETURN_URL or "http://testserver/"
+        expected_location = (
+            f"{frontend_return_url}#auth-error"
+            if authentication_failed
+            else frontend_return_url
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], expected_location)
+        self.assertNotIn("authorization-code", response["Location"])
+        self.assertNotIn("access-token-value", response["Location"])
+        self.assertNotIn("state", response["Location"])
+        self.assertNotIn("code=", response["Location"])
+
     def test_start_creates_backend_only_temporary_flow_with_pkce(self) -> None:
         """Store nonce and PKCE verifier only in the backend temporary cache.
 
@@ -185,6 +214,7 @@ class GoogleOIDCFlowTests(TestCase):
             },
         },
         DEBUG=False,
+        FRONTEND_AUTH_RETURN_URL="https://testserver/",
         GOOGLE_OIDC_REDIRECT_URI="https://testserver/api/auth/google/callback/",
         GOOGLE_OIDC_REQUIRE_SHARED_FLOW_CACHE=True,
     )
@@ -196,8 +226,7 @@ class GoogleOIDCFlowTests(TestCase):
         """
         response = self.client.get(reverse("google-login-start"))
 
-        self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json(), {"error": "authentication_unavailable"})
+        self._assert_frontend_redirect(response, authentication_failed=True)
 
     def test_callback_authenticates_new_user_rotates_session_and_consumes_flow(self) -> None:
         """Authenticate a new user only after state and ID token validation.
@@ -212,12 +241,15 @@ class GoogleOIDCFlowTests(TestCase):
         # Simulates the Google callback (the end of the flow).
         response = self._complete_flow(state=state, metadata=metadata)
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"authenticated": True})
+        self._assert_frontend_redirect(response, authentication_failed=False)
         # Verifies that metadata was removed.
         self.assertIsNone(cache.get(cache_key))
         # Verifies the rotation of the session.
         self.assertNotEqual(initial_session_key, self.client.session.session_key)
+        self.assertEqual(
+            self.client.get(reverse("session-status")).json(),
+            {"authenticated": True},
+        )
 
         user = CustomUser.objects.get(google_subject="google-subject-flow")
 
@@ -244,8 +276,9 @@ class GoogleOIDCFlowTests(TestCase):
             str(metadata["code_verifier"]),
             "google-subject-flow",
         ):
-            # Ensures that sensitive data is not leaked in the HTTP response body and in the user session.
+            # Ensures that sensitive data is not leaked in the HTTP response body, redirect URL and session.
             self.assertNotIn(sensitive_value, response_body)
+            self.assertNotIn(sensitive_value, response["Location"])
             self.assertNotIn(sensitive_value, session_values)
 
     def test_callback_uses_existing_user_without_privilege_escalation(self) -> None:
@@ -265,7 +298,7 @@ class GoogleOIDCFlowTests(TestCase):
             subject="google-subject-existing",
         )
 
-        self.assertEqual(response.status_code, 200)
+        self._assert_frontend_redirect(response, authentication_failed=False)
         self.assertEqual(CustomUser.objects.count(), 1)
         existing_user.refresh_from_db()
         self.assertFalse(existing_user.is_staff)
@@ -283,7 +316,7 @@ class GoogleOIDCFlowTests(TestCase):
             {"code": "authorization-code"},
         )
 
-        self.assertEqual(missing_response.status_code, 400)
+        self._assert_frontend_redirect(missing_response, authentication_failed=True)
 
         # Using a wrong state.
         wrong_response = self.client.get(
@@ -294,14 +327,14 @@ class GoogleOIDCFlowTests(TestCase):
             },
         )
 
-        self.assertEqual(wrong_response.status_code, 400)
+        self._assert_frontend_redirect(wrong_response, authentication_failed=True)
 
         state, metadata, _cache_key = self._start_flow()
         first_response = self._complete_flow(state=state, metadata=metadata)
         second_response = self._complete_flow(state=state, metadata=metadata)
 
-        self.assertEqual(first_response.status_code, 200)
-        self.assertEqual(second_response.status_code, 400)
+        self._assert_frontend_redirect(first_response, authentication_failed=False)
+        self._assert_frontend_redirect(second_response, authentication_failed=True)
 
         expired_state, expired_metadata, expired_cache_key = self._start_flow()
         expired_metadata["expires_at"] = int(timezone.now().timestamp()) - 1
@@ -311,7 +344,7 @@ class GoogleOIDCFlowTests(TestCase):
             metadata=expired_metadata,
         )
 
-        self.assertEqual(expired_response.status_code, 400)
+        self._assert_frontend_redirect(expired_response, authentication_failed=True)
         self.assertIsNone(cache.get(expired_cache_key))
 
     def test_callback_rejects_wrong_nonce(self) -> None:
@@ -332,7 +365,7 @@ class GoogleOIDCFlowTests(TestCase):
             claims=claims,
         )
 
-        self.assertEqual(response.status_code, 400)
+        self._assert_frontend_redirect(response, authentication_failed=True)
         self.assertFalse(
             CustomUser.objects.filter(
                 google_subject="google-subject-flow",
@@ -356,11 +389,13 @@ class GoogleOIDCFlowTests(TestCase):
         )
         response_body = response.content.decode("utf-8")
 
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {"error": "authentication_canceled"})
+        self._assert_frontend_redirect(response, authentication_failed=True)
         self.assertNotIn("access_denied", response_body)
         self.assertNotIn(state, response_body)
         self.assertNotIn("authorization-code", response_body)
+        self.assertNotIn("access_denied", response["Location"])
+        self.assertNotIn(state, response["Location"])
+        self.assertNotIn("authorization-code", response["Location"])
         self.assertIsNone(cache.get(cache_key))
 
     def test_callback_rejects_id_token_with_disallowed_algorithm(self) -> None:
@@ -392,7 +427,7 @@ class GoogleOIDCFlowTests(TestCase):
                 },
             )
 
-        self.assertEqual(response.status_code, 400)
+        self._assert_frontend_redirect(response, authentication_failed=True)
         # This confirms that the backend does not attempt to cryptographically verify a token whose alg has already been rejected by policy.
         verifier_mock.assert_not_called()
         self.assertFalse(CustomUser.objects.exists())
@@ -407,6 +442,7 @@ class GoogleOIDCFlowTests(TestCase):
         anonymous_response = self.client.get(reverse("session-status"))
 
         self.assertEqual(anonymous_response.json(), {"authenticated": False})
+        self.assertIn(settings.CSRF_COOKIE_NAME, anonymous_response.cookies)
 
         user = CustomUser.objects.create_user(
             google_subject="google-subject-status",

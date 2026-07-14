@@ -1,23 +1,25 @@
 /* PreferencesPanel.module.css styles the user preference select controls. */
 
+/* Anchor the desktop preferences panel to the settings control. */
 .preferencesPanel {
-  width: min(420px, calc(100vw - 32px));
+  width: min(420px, calc(100vw - var(--space-xl)));
   position: absolute;
-  top: calc(100% + 12px);
+  top: calc(100% + var(--space-sm));
   right: 0;
-  z-index: 40;
+  z-index: var(--z-popover);
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: var(--space-xs);
   border: 0;
   background: transparent;
 }
 
+/* Each field groups its visible label and native select control. */
 .preferenceField {
   display: grid;
-  gap: 8px;
-  padding: 8px 6px 0;
-  background: var(--color-cyan-soft);
+  gap: var(--space-xs);
+  padding: var(--space-xs) 6px 0;
+  background: var(--color-support-soft);
   color: var(--color-text-strong);
   font-size: 0.95rem;
   font-weight: 700;
@@ -28,41 +30,44 @@
   color: var(--color-text-strong);
 }
 
+/* Preserve native semantics while drawing a consistent high-contrast select arrow. */
 .preferenceField select {
   width: 100%;
   min-height: 52px;
-  padding: 0 48px 0 18px;
-  border: 2px solid var(--color-cyan);
+  padding: 0 var(--space-2xl) 0 18px;
+  border: var(--border-width-medium) solid var(--color-support);
   border-radius: 0;
   appearance: none;
   background:
-    linear-gradient(45deg, transparent 50%, var(--color-cyan) 50%) right 22px center / 9px 9px
+    linear-gradient(45deg, transparent 50%, var(--color-support) 50%) right 22px center / 9px 9px
       no-repeat,
-    linear-gradient(135deg, var(--color-cyan) 50%, transparent 50%) right 14px center / 9px 9px
+    linear-gradient(135deg, var(--color-support) 50%, transparent 50%) right 14px center / 9px 9px
       no-repeat,
-    var(--color-accent);
-  color: var(--color-background);
+    var(--color-action-primary);
+  color: var(--color-text-on-accent);
   font: inherit;
   font-weight: 800;
   cursor: pointer;
 }
 
+/* Native option colors remain readable when the select menu is opened. */
 .preferenceField select option {
-  background: var(--color-cyan-soft);
+  background: var(--color-support-soft);
   color: var(--color-text-strong);
 }
 
 .preferenceField select:focus-visible {
   outline: var(--focus-outline);
-  outline-offset: 3px;
+  outline-offset: var(--focus-outline-offset);
 }
 
+/* On smaller screens, detach the panel from the icon to use the viewport width. */
 @media (max-width: 760px) {
   .preferencesPanel {
     width: auto;
     position: fixed;
     top: 88px;
-    right: 16px;
-    left: 16px;
+    right: var(--space-md);
+    left: var(--space-md);
   }
 }

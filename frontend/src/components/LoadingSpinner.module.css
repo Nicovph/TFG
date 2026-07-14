@@ -1,0 +1,38 @@
+/* LoadingSpinner.module.css styles shared progress indicators and their visual variants. */
+
+/* All variants share motion behavior while retaining distinct size and color roles. */
+.spinner {
+  display: block;
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+}
+
+/* For secondary actions. */
+.compact {
+  width: 16px;
+  height: 16px;
+  border: var(--border-width-strong) solid var(--color-action-contrast-soft);
+  border-top-color: var(--color-action-contrast);
+}
+
+/* For primary actions. */
+.status {
+  width: 66px;
+  height: 66px;
+  border: 8px solid var(--color-support-soft);
+  border-top-color: var(--color-action-primary);
+}
+
+/* Rotation is isolated so reduced-motion preferences can disable it. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Users who request reduced motion receive static progress feedback. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

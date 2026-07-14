@@ -1,10 +1,12 @@
 /* AccountMenu.module.css styles the account pill and logout popover. */
 
+/* Keep the account control below settings tooltips but above the base header. */
 .accountArea {
   position: relative;
-  z-index: 35;
+  z-index: var(--z-account-trigger);
 }
 
+/* The account trigger keeps a stable touch target for its localized label. */
 .userPill {
   min-width: 126px;
   min-height: 34px;
@@ -14,44 +16,57 @@
   padding: 0 14px;
   border: 0;
   border-radius: var(--radius-pill);
-  background: var(--color-cyan-pill);
-  color: var(--color-background);
+  background: var(--color-account-surface);
+  color: var(--color-text-on-accent);
   font-weight: 800;
   font-size: 0.8rem;
   text-transform: uppercase;
   cursor: pointer;
 }
 
+/* Position account actions relative to the trigger on desktop. */
 .accountPanel {
   min-width: 142px;
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  z-index: 40;
-  padding: 8px;
-  border: 1px solid var(--color-border-purple);
+  z-index: var(--z-popover);
+  padding: var(--space-xs);
+  border: var(--border-width-thin) solid var(--color-border-accent-soft);
   border-radius: var(--radius-medium);
-  background: var(--color-background);
-  box-shadow: 0 18px 36px rgba(75, 75, 88, 0.16);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-popover);
 }
 
+/* Keep the logout action large enough for pointer and touch interaction. */
 .accountPanel button {
   width: 100%;
   min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
   border: 0;
   border-radius: var(--radius-small);
-  background: var(--color-accent-soft);
-  color: #6d54d8;
+  background: var(--color-action-soft);
+  color: var(--color-action-contrast);
   font-weight: 800;
   cursor: pointer;
 }
 
+.accountPanel button:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+/* Preserve visible keyboard focus for both account actions. */
 .userPill:focus-visible,
 .accountPanel button:focus-visible {
   outline: var(--focus-outline);
-  outline-offset: 3px;
+  outline-offset: var(--focus-outline-offset);
 }
 
+/* Reduce trigger width without shrinking its touch height. */
 @media (max-width: 520px) {
   .userPill {
     min-width: 116px;

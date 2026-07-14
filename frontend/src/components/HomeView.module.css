@@ -1,70 +1,33 @@
 /* HomeView.module.css styles the initial TEAslator entry screen. */
 
+/* The unauthenticated entry view fills the visible browser viewport. */
 .homeView {
-  min-height: 100svh;
-  background: var(--color-background);
-  color: var(--color-text);
+  min-height: var(--page-min-height);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
 }
 
+/* Reserve a stable header row for the primary navigation control. */
 .homeHeader {
-  min-height: 84px;
+  min-height: var(--header-min-height);
   display: flex;
   align-items: center;
-  padding: 18px var(--page-inline-padding);
+  padding: var(--header-block-padding) var(--page-inline-padding);
 }
 
-.menuButton {
-  width: 42px;
-  height: 42px;
-  display: inline-grid;
-  place-items: center;
-  border: 0;
-  border-radius: var(--radius-medium);
-  background: transparent;
-  color: var(--color-accent);
-  cursor: pointer;
-}
-
-.menuButton span,
-.menuButton span::before,
-.menuButton span::after {
-  width: 24px;
-  height: 3px;
-  display: block;
-  border-radius: var(--radius-pill);
-  background: currentColor;
-}
-
-.menuButton span {
-  position: relative;
-}
-
-.menuButton span::before,
-.menuButton span::after {
-  content: '';
-  position: absolute;
-  left: 0;
-}
-
-.menuButton span::before {
-  top: -7px;
-}
-
-.menuButton span::after {
-  top: 7px;
-}
-
+/* Center the entry flow while retaining width for the longest action label. */
 .homeContent {
-  min-height: calc(100svh - 116px);
-  width: min(520px, calc(100% - 40px));
+  min-height: calc(var(--page-min-height) - 116px);
+  width: min(520px, calc(100% - var(--page-content-gutter)));
   margin: 0 auto;
-  padding: 24px 0 64px;
+  padding: var(--space-lg) 0 var(--space-3xl);
   display: grid;
   place-items: center;
   align-content: center;
   gap: 14px;
 }
 
+/* Scale the brand asset within explicit bounds to prevent layout shifts. */
 .homeLogo {
   width: clamp(118px, 26vw, 172px);
   height: clamp(118px, 26vw, 172px);
@@ -87,6 +50,7 @@
   -webkit-text-fill-color: transparent;
 }
 
+/* Keep the tagline on one line while retaining responsive brand spacing. */
 .brandTagline {
   margin: 0;
   color: var(--color-text-muted);
@@ -97,28 +61,55 @@
   white-space: nowrap;
 }
 
+/* Follow Google's approved light pill treatment while retaining a suitable touch target. */
 .googleButton {
-  min-height: 44px;
+  min-height: var(--google-button-min-height);
   margin-top: 18px;
-  padding: 0 26px;
-  border: 0;
+  padding: 0 var(--google-button-inline-padding);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--google-button-content-gap);
+  border: var(--border-width-thin) solid var(--google-button-border-color);
   border-radius: var(--radius-pill);
-  background: var(--color-accent-strong);
-  color: var(--color-background);
-  font-weight: 800;
+  background: var(--google-button-background);
+  color: var(--google-button-text-color);
+  font-family: var(--google-button-font-family);
+  font-size: var(--google-button-font-size);
+  font-weight: var(--google-button-font-weight);
+  line-height: var(--google-button-line-height);
+  letter-spacing: 0;
   cursor: pointer;
-  box-shadow: 0 14px 32px rgba(112, 91, 230, 0.22);
+  box-shadow: var(--google-button-shadow);
 }
 
-.menuButton:focus-visible,
+/* Preserve the official multicolor mark inside a stable, non-textual image box. */
+.googleLogo {
+  width: var(--google-button-logo-size);
+  height: var(--google-button-logo-size);
+  flex: 0 0 var(--google-button-logo-size);
+  object-fit: contain;
+}
+
+.googleButton:hover {
+  background: var(--google-button-background-hover);
+  box-shadow: var(--google-button-shadow-hover);
+}
+
+.googleButton:active {
+  background: var(--google-button-background-active);
+}
+
+/* Both entry-screen actions expose a consistent keyboard focus indicator. */
 .googleButton:focus-visible {
   outline: var(--focus-outline);
-  outline-offset: 3px;
+  outline-offset: var(--focus-outline-offset);
 }
 
+/* Tighten vertical and typographic spacing on narrow mobile screens. */
 @media (max-width: 520px) {
   .homeContent {
-    min-height: calc(100svh - 96px);
+    min-height: calc(var(--page-min-height) - 96px);
   }
 
   .brandTagline {

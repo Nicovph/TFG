@@ -1,11 +1,13 @@
 /* Drawer.module.css styles the modal left navigation drawer. */
 
+/* The drawer layer sits above application popovers and blocks background interaction. */
 .drawerLayer {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--z-drawer);
 }
 
+/* The backdrop provides a large pointer target for dismissing the modal drawer. */
 .drawerBackdrop {
   position: absolute;
   inset: 0;
@@ -14,19 +16,21 @@
   cursor: pointer;
 }
 
+/* Keep the panel above its backdrop within the drawer stacking context. */
 .drawerPanel {
   width: min(390px, 88vw);
-  min-height: 100svh;
+  min-height: var(--page-min-height);
   position: relative;
   z-index: 1;
-  padding: 26px 24px;
+  padding: 26px var(--space-lg);
   display: grid;
   align-content: start;
   gap: 42px;
-  background: var(--color-background);
-  box-shadow: var(--shadow-drawer);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-navigation);
 }
 
+/* Align the drawer identity with its close control. */
 .drawerHeader {
   display: flex;
   align-items: start;
@@ -49,16 +53,17 @@
   -webkit-text-fill-color: transparent;
 }
 
+/* Build the close glyph from two crossing bars without an image asset. */
 .closeButton {
-  width: 42px;
-  height: 42px;
+  width: var(--icon-control-size);
+  height: var(--icon-control-size);
   display: inline-grid;
   place-items: center;
   position: relative;
   border: 0;
   border-radius: var(--radius-medium);
   background: transparent;
-  color: var(--color-accent);
+  color: var(--color-action-primary);
   cursor: pointer;
 }
 
@@ -82,6 +87,7 @@
   transform: rotate(90deg);
 }
 
+/* Navigation remains vertical for predictable visual and keyboard scanning. */
 .drawerNav {
   display: grid;
   gap: 6px;
@@ -90,10 +96,10 @@
 .drawerNav button {
   width: 100%;
   min-height: 46px;
-  padding: 0 4px;
+  padding: 0 var(--space-2xs);
   border: 0;
   background: transparent;
-  color: var(--color-text);
+  color: var(--color-text-primary);
   font: inherit;
   font-weight: 700;
   text-align: left;
@@ -102,18 +108,20 @@
 
 .drawerNav .primaryNavItem {
   min-height: 58px;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-md);
   padding-bottom: 18px;
-  border-bottom: 1px solid #b9b9c2;
+  border-bottom: var(--border-width-thin) solid var(--color-border-muted);
 }
 
+/* Ensure every interactive drawer element retains visible keyboard focus. */
 .closeButton:focus-visible,
 .drawerBackdrop:focus-visible,
 .drawerNav button:focus-visible {
   outline: var(--focus-outline);
-  outline-offset: 3px;
+  outline-offset: var(--focus-outline-offset);
 }
 
+/* Use the full viewport width on small devices to avoid a narrow interaction region. */
 @media (max-width: 520px) {
   .drawerPanel {
     width: 100vw;

@@ -5,6 +5,7 @@
 
 import { useEffect, useRef } from 'react'
 import type { InfoView } from '../data/infoPages' // To restrict navigation to informational pages.
+import { Tooltip } from './Tooltip'
 import styles from './Drawer.module.css'
 
 const FOCUSABLE_SELECTOR =
@@ -88,6 +89,17 @@ export function Drawer({ open, onClose, onNavigate }: DrawerProps) {
         return
       }
 
+      const activeElement = document.activeElement
+      const focusIsInsidePanel =
+        activeElement instanceof Node && panelRef.current.contains(activeElement)
+
+      // Recover focus containment if another script or DOM change moved focus outside the drawer.
+      if (!focusIsInsidePanel) {
+        event.preventDefault()
+        ;(event.shiftKey ? lastElement : firstElement).focus()
+        return
+      }
+
       if (event.shiftKey && document.activeElement === firstElement) {
         event.preventDefault()
         lastElement.focus()
@@ -126,15 +138,17 @@ export function Drawer({ open, onClose, onNavigate }: DrawerProps) {
           <h2 className={styles.drawerBrand} id="drawer-title">
             <span>TEA</span>slator
           </h2>
-          <button
-            className={styles.closeButton}
-            type="button"
-            aria-label="Cerrar menú"
-            onClick={onClose}
-            ref={closeButtonRef}
-          >
-            <span aria-hidden="true"></span>
-          </button>
+          <Tooltip align="end" label="Cerrar menú">
+            <button
+              className={styles.closeButton}
+              type="button"
+              aria-label="Cerrar menú"
+              onClick={onClose}
+              ref={closeButtonRef}
+            >
+              <span aria-hidden="true"></span>
+            </button>
+          </Tooltip>
         </div>
         <nav className={styles.drawerNav} aria-label="Menú principal">
           <button

@@ -16,3 +16,7 @@ export interface MockInterpretation {
   signals: string[]
   visualConcepts: string[]
 }
+
+export interface SessionStatus {
+  authenticated: boolean
+}

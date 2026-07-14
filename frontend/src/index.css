@@ -1,57 +1,134 @@
 /* index.css defines global design tokens and browser-level base styles. */
 
+/* Register the locally bundled typeface required by Google's sign-in branding. */
+@font-face {
+  font-family: 'Roboto';
+  src: url('./assets/fonts/Roboto-Medium.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+/* Shared design tokens keep colors, spacing, elevation, and focus treatment consistent. */
 :root {
-  --color-background: #ffffff;
-  --color-text: #4f4f59;
+  --color-surface: #ffffff;
+  --color-surface-translucent: rgba(255, 255, 255, 0.94);
+  --color-text-primary: #4f4f59;
+  --color-text-copy: #5b5b65;
+  --color-text-input: #404047;
+  --color-text-secondary: #81818c;
   --color-text-strong: #43434b;
   --color-text-muted: #757580;
-  --color-placeholder: #9696a0;
-  --color-brand: #6f75ff;
+  --color-text-on-accent: #ffffff;
+  --color-text-placeholder: #9696a0;
   --brand-gradient: linear-gradient(90deg, #805eff 0%, #8171ff 48%, #81deeb 100%);
-  --color-accent: #8a63ff;
-  --color-accent-strong: #9d72f6;
-  --color-accent-soft: #f8f3ff;
-  --color-cyan: #54d4e3;
-  --color-cyan-strong: #2b8a96;
-  --color-cyan-soft: #e9fbfd;
-  --color-cyan-pill: #5ed7df;
-  --color-border-purple: #e3daf8;
-  --color-border-control: #c9b8ff;
+  --color-action-primary: #8a63ff;
+  --color-action-filled: #9d72f6;
+  --color-action-contrast: #6d54d8;
+  --color-action-contrast-soft: rgba(109, 84, 216, 0.18);
+  --color-action-soft: #f8f3ff;
+  --color-support: #54d4e3;
+  --color-support-deep: #287f8a;
+  --color-support-strong: #2b8a96;
+  --color-support-soft: #e9fbfd;
+  --color-support-soft-translucent: rgba(233, 251, 253, 0.88);
+  --color-account-surface: #5ed7df;
+  --color-focus-soft: rgba(84, 212, 227, 0.26);
+  --color-border-accent-soft: #e3daf8;
+  --color-border-muted: #b9b9c2;
+  --color-tooltip-background: #2f2f37;
+  --color-tooltip-border: #4b4b55;
   --color-overlay: rgba(39, 39, 48, 0.26);
   --color-overlay-soft: rgba(39, 39, 48, 0.18);
+  --color-status-shadow: rgba(84, 212, 227, 0.18);
+
+  /* A compact spacing scale represents shared layout rhythm instead of every literal size. */
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* Shared dimensions keep controls, focus rings, and page framing consistent. */
+  --viewport-min-width: 320px;
+  --page-min-height: 100svh;
+  --page-content-gutter: 40px;
+  --header-min-height: 84px;
+  --header-block-padding: 18px;
+  --icon-control-size: 42px;
+  --brand-logo-size: 92px;
+  --border-width-thin: 1px;
+  --border-width-control: 1.5px;
+  --border-width-medium: 2px;
+  --border-width-strong: 3px;
+  --border-width-emphasis: 4px;
+  --focus-outline-offset: 3px;
+  --z-popover-backdrop: 30;
+  --z-account-trigger: 35;
+  --z-settings-trigger: 36;
+  --z-popover: 40;
+  --z-drawer: 60;
+  --z-dialog: 80;
+  --z-tooltip: 100;
+
   --radius-small: 6px;
   --radius-medium: 8px;
   --radius-large: 14px;
   --radius-pill: 999px;
-  --shadow-panel: 0 20px 42px rgba(75, 75, 88, 0.18);
-  --shadow-dialog: 0 24px 52px rgba(41, 41, 50, 0.22);
-  --shadow-drawer: 20px 0 42px rgba(61, 61, 72, 0.18);
-  --focus-outline: 3px solid var(--color-cyan);
+  --shadow-popover: 0 18px 36px rgba(75, 75, 88, 0.16);
+  --shadow-modal: 0 24px 52px rgba(41, 41, 50, 0.22);
+  --shadow-navigation: 20px 0 42px rgba(61, 61, 72, 0.18);
+  --shadow-tooltip: 0 5px 14px rgba(39, 39, 48, 0.22);
+  --focus-outline: var(--border-width-strong) solid var(--color-support);
   --page-inline-padding: clamp(20px, 4vw, 48px);
 
+  /* Google sign-in tokens isolate vendor branding from component-level layout rules. */
+  --google-button-background: #ffffff;
+  --google-button-background-hover: #f8faff;
+  --google-button-background-active: #f1f3f4;
+  --google-button-border-color: #747775;
+  --google-button-text-color: #1f1f1f;
+  --google-button-shadow: 0 1px 2px rgba(60, 64, 67, 0.3);
+  --google-button-shadow-hover: 0 1px 3px rgba(60, 64, 67, 0.35);
+  --google-button-min-height: 44px;
+  --google-button-inline-padding: 12px;
+  --google-button-content-gap: 10px;
+  --google-button-logo-size: 20px;
+  --google-button-font-family: 'Roboto', Arial, sans-serif;
+  --google-button-font-size: 14px;
+  --google-button-font-weight: 500;
+  --google-button-line-height: 20px;
+
+  /* The system-font fallback keeps text readable while the preferred font is unavailable. */
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
     sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: var(--color-text);
-  background: var(--color-background);
+  color: var(--color-text-primary);
+  background: var(--color-surface);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Border-box sizing makes component dimensions include their padding and borders. */
 * {
   box-sizing: border-box;
 }
 
+/* Small viewport units account for mobile browser chrome without forcing overflow. */
 body {
-  min-width: 320px;
-  min-height: 100svh;
+  min-width: var(--viewport-min-width);
+  min-height: var(--page-min-height);
   margin: 0;
 }
 
+/* Form controls inherit the application typography instead of browser-specific defaults. */
 button,
 select,
 textarea {

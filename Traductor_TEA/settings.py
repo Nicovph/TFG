@@ -520,6 +520,14 @@ if CSRF_COOKIE_SAMESITE == "None" and not CSRF_COOKIE_SECURE:
 # Avoid leaking OAuth/OIDC callback query parameters through outbound referrers.
 SECURE_REFERRER_POLICY = "same-origin" # The referrer (callback with code and state) will only be sent to the same origin.
 
+# Frontend URL used after the backend has processed the browser OAuth/OIDC callback.
+# It is intentionally non-sensitive and may remain empty so local development can
+# return to the same origin that received the proxied callback.
+FRONTEND_AUTH_RETURN_URL = aplication_config.get(
+    "FRONTEND_AUTH_RETURN_URL",
+    "",
+).strip()
+
 
 # Google OpenID Connect configuration. The sensitive values are optional at
 # process start so local commands can run without real provider credentials.

@@ -3,12 +3,15 @@
  * the wireframes.
  */
 
+import type { Ref } from 'react'
 import { BRAND_TAGLINE } from '../data/infoPages'
-import { MAIN_DRAWER_ID } from './Drawer'
+import googleLogo from '../assets/google-g-logo.png'
+import { MenuButton } from './MenuButton'
 import styles from './HomeView.module.css'
 
 interface HomeViewProps {
   logoSrc: string
+  menuButtonRef: Ref<HTMLButtonElement>
   menuOpen: boolean
   onGoogleEntry: () => void
   onMenuToggle: () => void
@@ -23,21 +26,17 @@ interface HomeViewProps {
  * Returns:
  *   The home view element.
  */
-export function HomeView({ logoSrc, menuOpen, onGoogleEntry, onMenuToggle }: HomeViewProps) {
+export function HomeView({
+  logoSrc,
+  menuButtonRef,
+  menuOpen,
+  onGoogleEntry,
+  onMenuToggle,
+}: HomeViewProps) {
   return (
     <main className={styles.homeView}>
       <header className={styles.homeHeader}>
-        <button
-          className={styles.menuButton}
-          type="button"
-          aria-label="Abrir menú"
-          aria-expanded={menuOpen}
-          aria-controls={MAIN_DRAWER_ID}
-          aria-haspopup="dialog"
-          onClick={onMenuToggle}
-        >
-          <span aria-hidden="true"></span>
-        </button>
+        <MenuButton buttonRef={menuButtonRef} menuOpen={menuOpen} onToggle={onMenuToggle} />
       </header>
 
       <section className={styles.homeContent} aria-labelledby="home-title">
@@ -47,7 +46,14 @@ export function HomeView({ logoSrc, menuOpen, onGoogleEntry, onMenuToggle }: Hom
         </h1>
         <p className={styles.brandTagline}>{BRAND_TAGLINE}</p>
         <button className={styles.googleButton} type="button" onClick={onGoogleEntry}>
-          ENTRAR CON GOOGLE
+          <img
+            className={styles.googleLogo}
+            src={googleLogo}
+            width="20"
+            height="20"
+            alt=""
+          />
+          <span>Acceder con Google</span>
         </button>
       </section>
     </main>

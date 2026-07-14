@@ -1,0 +1,42 @@
+/* Tooltip.module.css styles visual hints for accessible icon-only controls. */
+
+/* The anchor creates a positioning context without changing control dimensions. */
+.tooltipAnchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Tooltips stay interactive so pointer users can move onto revealed content. */
+.tooltip {
+  min-height: 30px;
+  position: absolute;
+  top: calc(100% + var(--space-xs));
+  z-index: var(--z-tooltip);
+  padding: 5px 9px;
+  border: var(--border-width-thin) solid var(--color-tooltip-border);
+  border-radius: 4px;
+  background: var(--color-tooltip-background);
+  color: var(--color-text-on-accent);
+  box-shadow: var(--shadow-tooltip);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+/* Alignment modifiers prevent labels from overflowing near viewport edges. */
+.start {
+  left: 0;
+}
+
+.center {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.end {
+  right: 0;
+}

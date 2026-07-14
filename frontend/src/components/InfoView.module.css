@@ -1,30 +1,20 @@
 /* InfoView.module.css styles static legal and project information pages. */
 
+/* Informational pages use a full-height neutral reading surface. */
 .infoView {
-  min-height: 100svh;
-  background: var(--color-background);
-  color: var(--color-text);
+  min-height: var(--page-min-height);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
 }
 
+/* Keep navigation and the returnable brand block at opposite header edges. */
 .infoHeader {
   min-height: 132px;
-  padding: 18px var(--page-inline-padding);
+  padding: var(--header-block-padding) var(--page-inline-padding);
   display: flex;
   align-items: start;
   justify-content: space-between;
-  gap: 24px;
-}
-
-.menuButton {
-  width: 42px;
-  height: 42px;
-  display: inline-grid;
-  place-items: center;
-  border: 0;
-  border-radius: var(--radius-medium);
-  background: transparent;
-  color: var(--color-accent);
-  cursor: pointer;
+  gap: var(--space-lg);
 }
 
 .infoNavigation {
@@ -33,15 +23,16 @@
   gap: 10px;
 }
 
+/* Draw the back arrow with borders so it inherits the current text color. */
 .backButton {
-  width: 42px;
-  height: 42px;
+  width: var(--icon-control-size);
+  height: var(--icon-control-size);
   display: inline-grid;
   place-items: center;
   border: 0;
   border-radius: var(--radius-medium);
   background: transparent;
-  color: var(--color-accent);
+  color: var(--color-action-primary);
   cursor: pointer;
 }
 
@@ -49,50 +40,22 @@
   width: 14px;
   height: 14px;
   display: block;
-  border-bottom: 3px solid currentColor;
-  border-left: 3px solid currentColor;
+  border-bottom: var(--border-width-strong) solid currentColor;
+  border-left: var(--border-width-strong) solid currentColor;
   transform: rotate(45deg);
 }
 
+/* The brand acts as an additional, visibly labelled return control. */
 .infoBrandButton {
   max-width: 220px;
   display: grid;
   justify-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
   border: 0;
   background: transparent;
   color: inherit;
   text-align: center;
   cursor: pointer;
-}
-
-.menuButton span,
-.menuButton span::before,
-.menuButton span::after {
-  width: 24px;
-  height: 3px;
-  display: block;
-  border-radius: var(--radius-pill);
-  background: currentColor;
-}
-
-.menuButton span {
-  position: relative;
-}
-
-.menuButton span::before,
-.menuButton span::after {
-  content: '';
-  position: absolute;
-  left: 0;
-}
-
-.menuButton span::before {
-  top: -7px;
-}
-
-.menuButton span::after {
-  top: 7px;
 }
 
 .infoBrandButton img {
@@ -124,8 +87,9 @@
   white-space: nowrap;
 }
 
+/* Limit article width and line length to support comfortable reading. */
 .infoArticle {
-  width: min(780px, calc(100% - 40px));
+  width: min(780px, calc(100% - var(--page-content-gutter)));
   margin: 0 auto;
   padding: clamp(20px, 6vw, 80px) 0 84px;
 }
@@ -139,18 +103,19 @@
 
 .infoArticle p {
   max-width: 68ch;
-  margin: 0 0 16px;
-  color: #5b5b65;
+  margin: 0 0 var(--space-md);
+  color: var(--color-text-copy);
   font-size: 1rem;
 }
 
-.menuButton:focus-visible,
+/* Preserve visible keyboard focus across every header action. */
 .backButton:focus-visible,
 .infoBrandButton:focus-visible {
   outline: var(--focus-outline);
-  outline-offset: 3px;
+  outline-offset: var(--focus-outline-offset);
 }
 
+/* Reduce the secondary brand footprint while retaining navigation controls. */
 @media (max-width: 760px) {
   .infoHeader {
     align-items: start;

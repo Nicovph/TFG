@@ -5,6 +5,7 @@
 
 import type { SubmitEventHandler } from 'react'
 import { VISUAL_SUPPORT_DIALOG_ID } from './VisualSupportDialog'
+import visuallyHiddenStyles from './VisuallyHidden.module.css'
 import styles from './InterpretationWorkspace.module.css'
 import type { MockInterpretation } from '../types'
 
@@ -48,7 +49,7 @@ export function InterpretationWorkspace({
     <section className={styles.workspace} aria-labelledby="workspace-title">
       <img className={styles.workspaceMark} src={logoSrc} width="92" height="92" alt="" />
       {/* // Hidden title for screen readers. */}
-      <h1 className={styles.srOnly} id="workspace-title">
+      <h1 className={visuallyHiddenStyles.visuallyHidden} id="workspace-title">
         Interpretación de mensajes
       </h1>
 
@@ -68,7 +69,7 @@ export function InterpretationWorkspace({
 
         <div className={styles.workGrid}>
           <div className={styles.inputPanel}>
-            <label className={styles.srOnly} htmlFor="message-input">
+            <label className={visuallyHiddenStyles.visuallyHidden} htmlFor="message-input">
               Texto a interpretar
             </label>
             {/* // Permits multi-line input for the message to be interpreted. */}
