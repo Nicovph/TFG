@@ -73,6 +73,11 @@ services:
     environment:
       DJANGO_DB_PROFILE: app
       DJANGO_DB_APP_CREDENTIALS_FILE: /run/secrets/db_app_config
+      # Throws a clear error if not set in .env, preventing silent misconfiguration.
+      FRONTEND_AUTH_RETURN_URL: ${FRONTEND_AUTH_RETURN_URL:?Set FRONTEND_AUTH_RETURN_URL in .env}
+      GOOGLE_OIDC_CLIENT_ID: ${GOOGLE_OIDC_CLIENT_ID:?Set GOOGLE_OIDC_CLIENT_ID in .env}
+      GOOGLE_OIDC_CLIENT_SECRET_FILE: /run/secrets/google_oidc_client_secret
+      GOOGLE_OIDC_REDIRECT_URI: ${GOOGLE_OIDC_REDIRECT_URI:?Set GOOGLE_OIDC_REDIRECT_URI in .env}
       POSTGRES_DB: traductor_tea_db
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
@@ -82,6 +87,9 @@ services:
     secrets:
       - source: db_app_config
         target: db_app_config
+
+      - source: google_oidc_client_secret
+        target: google_oidc_client_secret
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck: # Checks periodically if Django is working.
@@ -136,5 +144,9 @@ secrets:
 
   db_test_config:
     file: ./.secrets/db-test.env
+
+  google_oidc_client_secret:
+    file: ./.secrets/google-oidc-client-secret.txt
+
 volumes:
   postgres_data:

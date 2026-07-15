@@ -21,6 +21,9 @@ from dotenv import dotenv_values
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Limit secret files to a small, predictable size before decoding them.
+MAX_SECRET_FILE_BYTES = 4096
+
 
 def get_database_credentials_file(
     profile_name: str,
@@ -48,8 +51,10 @@ def get_database_credentials_file(
                 f"{override_name} must be an absolute path."
             )
 
+        # For Docekr (/run/secrets/...)
         return override_path
 
+    # For local development (~.secrets/...)
     return BASE_DIR / ".secrets" / default_filename
 
 
@@ -218,6 +223,89 @@ aplication_config: Mapping[str, str] = { # Mapping of str key to str value.
                       # the profile-specific value will override the common one.
     **os.environ, # Finally inserts the environment variables of the operating system or the container. It has the highest priority.
 }
+
+
+def get_secret_setting(name: str, file_name: str) -> str:
+    """Load an optional secret from direct configuration or an absolute file
+    (GOOGLE_OIDC_CLIENT_SECRET=secret-value or 
+    GOOGLE_OIDC_CLIENT_SECRET_FILE=/run/secrets/google_oidc_client_secret).
+
+    Args:
+        name: The direct configuration key used outside containerized runtime.
+        file_name: The configuration key containing an absolute secret file path.
+
+    Raises:
+        ImproperlyConfigured: If both sources are configured, the file path is
+        unsafe, or the secret file cannot be read and validated.
+
+    Returns:
+        The normalized secret value, or an empty string when neither source is
+        configured.
+    """
+    direct_value = str(aplication_config.get(name, "") or "").strip()
+    configured_file = str(aplication_config.get(file_name, "") or "").strip()
+
+    if direct_value and configured_file:
+        raise ImproperlyConfigured(
+            f"Configure only one of {name} or {file_name}."
+        )
+
+    if direct_value:
+        if (
+            len(direct_value.encode("utf-8")) > MAX_SECRET_FILE_BYTES
+            or "\x00" in direct_value
+            or "\n" in direct_value
+            or "\r" in direct_value
+        ):
+            raise ImproperlyConfigured(
+                f"The secret configured by {name} must be one valid line."
+            )
+
+        return direct_value
+
+    # If neither name nor file_name exists.
+    if not configured_file:
+        return ""
+
+    secret_path = Path(configured_file)
+
+    if not secret_path.is_absolute():
+        raise ImproperlyConfigured(f"{file_name} must be an absolute path.")
+
+    try:
+        # Open in binary mode for the bytes control.
+        with secret_path.open("rb") as secret_file:
+            # 4096+1 bytes are read, so that if the file is very large, loading 
+            # it into memory is avoided and thus, you can know if the size falls within the limit.
+            raw_secret = secret_file.read(MAX_SECRET_FILE_BYTES + 1)
+    except OSError as exc:
+        raise ImproperlyConfigured(
+            f"Unable to read the secret configured by {file_name}."
+        ) from exc
+
+    if len(raw_secret) > MAX_SECRET_FILE_BYTES:
+        raise ImproperlyConfigured(
+            f"The secret configured by {file_name} is too large."
+        )
+
+    try:
+        secret_value = raw_secret.decode("utf-8").strip()
+    except UnicodeDecodeError as exc:
+        raise ImproperlyConfigured(
+            f"The secret configured by {file_name} must be UTF-8."
+        ) from exc
+
+    if (
+        not secret_value
+        or "\x00" in secret_value
+        or "\n" in secret_value
+        or "\r" in secret_value
+    ):
+        raise ImproperlyConfigured(
+            f"The secret configured by {file_name} must be one non-empty line."
+        )
+
+    return secret_value
 
 
 def get_required_setting(name: str) -> str:
@@ -535,10 +623,10 @@ GOOGLE_OIDC_CLIENT_ID = aplication_config.get(
     "GOOGLE_OIDC_CLIENT_ID",
     "",
 ).strip()
-GOOGLE_OIDC_CLIENT_SECRET = aplication_config.get(
+GOOGLE_OIDC_CLIENT_SECRET = get_secret_setting(
     "GOOGLE_OIDC_CLIENT_SECRET",
-    "",
-).strip()
+    "GOOGLE_OIDC_CLIENT_SECRET_FILE",
+)
 # It must match an authorized URI in the Cloud Console.
 GOOGLE_OIDC_REDIRECT_URI = aplication_config.get(
     "GOOGLE_OIDC_REDIRECT_URI",
