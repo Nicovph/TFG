@@ -1,5 +1,6 @@
 """Tests for the backend-managed Google OpenID Connect login flow."""
 
+import uuid
 from unittest import mock
 from urllib.parse import parse_qs, urlparse
 
@@ -259,12 +260,19 @@ class GoogleOIDCFlowTests(TestCase):
         self.assertIsNone(user.email)
         self.assertIsNone(user.first_name)
         self.assertIsNone(user.last_name)
-        self.assertTrue(
+        authentication_events = list(
             SecurityEvent.objects.filter(
                 actor=user,
-                event_type=SecurityEventType.LOGIN_SUCCEEDED,
-            ).exists()
+                event_type__in=(
+                    SecurityEventType.ACCOUNT_CREATED,
+                    SecurityEventType.LOGIN_SUCCEEDED,
+                ),
+            )
         )
+        self.assertEqual(len(authentication_events), 2)
+        request_ids = {event.request_id for event in authentication_events}
+        self.assertEqual(len(request_ids), 1)
+        self.assertIsInstance(request_ids.pop(), uuid.UUID)
 
         response_body = response.content.decode("utf-8")
         session_values = repr(dict(self.client.session.items()))
@@ -442,7 +450,13 @@ class GoogleOIDCFlowTests(TestCase):
         anonymous_response = self.client.get(reverse("session-status"))
 
         self.assertEqual(anonymous_response.json(), {"authenticated": False})
+        self.assertEqual(settings.CSRF_COOKIE_NAME, "csrftoken")
+        self.assertFalse(settings.CSRF_COOKIE_HTTPONLY)
+        self.assertFalse(settings.CSRF_USE_SESSIONS)
         self.assertIn(settings.CSRF_COOKIE_NAME, anonymous_response.cookies)
+        self.assertFalse(
+            anonymous_response.cookies[settings.CSRF_COOKIE_NAME]["httponly"]
+        )
 
         user = CustomUser.objects.create_user(
             google_subject="google-subject-status",
@@ -474,3 +488,8 @@ class GoogleOIDCFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"authenticated": False})
         self.assertFalse("_auth_user_id" in self.client.session)
+        logout_event = SecurityEvent.objects.get(
+            actor=user,
+            event_type=SecurityEventType.LOGOUT,
+        )
+        self.assertIsInstance(logout_event.request_id, uuid.UUID)

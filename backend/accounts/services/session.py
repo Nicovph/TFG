@@ -6,6 +6,7 @@ from django.contrib.auth import login, logout
 from django.http import HttpRequest
 
 from backend.audit.models import SecurityEvent, SecurityEventType
+from backend.audit.request_context import get_current_request_id
 
 from .config import GoogleOIDCConfig, get_google_oidc_config
 from .exceptions import (
@@ -129,5 +130,5 @@ def _record_failure(event_type: str) -> None:
     """
     SecurityEvent.objects.record(
         event_type=event_type,
-        request_id=uuid.uuid4(),
+        request_id=get_current_request_id() or uuid.uuid4(),
     )

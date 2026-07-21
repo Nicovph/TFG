@@ -33,6 +33,9 @@ class SecurityEventAdmin(admin.ModelAdmin):
     # Show the newest events first.
     ordering = ("-occurred_at",)
 
+    # Hide every bulk action from this append-only audit interface.
+    actions = None
+
     # Make all relevant audit fields read-only in the admin form.
     readonly_fields = (
         "id",

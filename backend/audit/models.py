@@ -6,11 +6,15 @@ import hashlib
 import hmac
 import ipaddress
 import uuid
+from collections.abc import Iterable
+from typing import NoReturn
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
+
+from .request_context import get_current_request_id
 
 
 # Validator for the stored keyed HMAC-SHA-256 IP pseudonym. This enforces the expected
@@ -33,7 +37,7 @@ def pseudonymize_ip_address(ip_address: str, *, key: bytes) -> str:
         A hexadecimal SHA-256 digest that cannot be reversed.
     
     Raises:
-        ValueError: If the key is empty.
+        ValueError: If the key is empty or the address is not valid IPv4/IPv6.
     """
     if not key:
         raise ValueError("Se requiere una clave de pseudonimización no vacía.")
@@ -51,6 +55,54 @@ def pseudonymize_ip_address(ip_address: str, *, key: bytes) -> str:
 # SecurityEvents.objects.filter(...).delete()
 class SecurityEventQuerySet(models.QuerySet):
     """QuerySet that blocks bulk mutation of audit events."""
+
+    def bulk_create(
+        self,
+        objs: Iterable[models.Model],
+        batch_size: int | None = None,
+        ignore_conflicts: bool = False,
+        update_conflicts: bool = False,
+        update_fields: Iterable[str] | None = None,
+        unique_fields: Iterable[str] | None = None,
+    ) -> NoReturn:
+        """Reject bulk inserts that bypass model validation and save hooks.
+
+        Args:
+            objs: Model instances that would be inserted.
+            batch_size: Optional maximum number of objects per insert query.
+            ignore_conflicts: Whether insertion conflicts would be ignored.
+            update_conflicts: Whether conflicts would update existing rows.
+            update_fields: Fields that would be updated after a conflict.
+            unique_fields: Fields used to identify insertion conflicts.
+
+        Raises:
+            ValidationError: Always, because events must use the validated
+                recording interface.
+        """
+        raise ValidationError(
+            "Los eventos de seguridad no pueden crearse en bloque; "
+            "debe utilizarse la interfaz de registro validada."
+        )
+
+    def bulk_update(
+        self,
+        objs: Iterable[models.Model],
+        fields: Iterable[str],
+        batch_size: int | None = None,
+    ) -> NoReturn:
+        """Reject bulk updates before Django opens its internal transaction.
+
+        Args:
+            objs: Model instances that would be updated.
+            fields: Model fields that would be written.
+            batch_size: Optional maximum number of objects per update query.
+
+        Raises:
+            ValidationError: Always, because audit events are immutable.
+        """
+        raise ValidationError(
+            "Los eventos de seguridad no pueden actualizarse en bloque."
+        )
 
     def update(self, **kwargs: object) -> int:
         """Reject bulk updates to preserve append-only audit integrity.
@@ -94,16 +146,23 @@ class SecurityEventManager(models.Manager.from_queryset(SecurityEventQuerySet)):
             event_type: The event type (must be a valid EventType choice).
             actor: Optional user actor associated with the event.
             source_ip_hash: Optional HMAC-SHA-256 digest of the source IP.
-            request_id: Optional request correlation identifier.
+            request_id: Optional explicit request correlation identifier. When
+                omitted during an HTTP request, the trusted server-generated
+                identifier from the current request context is used.
         
         Returns:
             The newly created and inserted SecurityEvents instance.
         """
+        resolved_request_id = (
+            request_id
+            if request_id is not None
+            else get_current_request_id()
+        )
         event = self.model(
             event_type=event_type,
             actor=actor,
             source_ip_hash=source_ip_hash,
-            request_id=request_id,
+            request_id=resolved_request_id,
         )
         event.save(force_insert=True)
         return event
@@ -283,4 +342,9 @@ class SecurityEvent(models.Model):
         Returns:
             A string formatted as 'event_type:id' with no embedded newlines.
         """
-        return f"{self.event_type}:{self.id}"
+        safe_event_type = (
+            self.event_type
+            if self.event_type in SecurityEventType.values
+            else "invalid_event_type"
+        )
+        return f"{safe_event_type}:{self.id}"

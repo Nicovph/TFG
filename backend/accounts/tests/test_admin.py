@@ -1,7 +1,7 @@
 """Tests for account administration permissions and passwordless behavior."""
 
 from django.contrib import admin
-from django.contrib.auth.models import AnonymousUser
+from django.contrib.auth.models import AnonymousUser, Group
 from django.http import HttpRequest
 from django.test import RequestFactory, TestCase
 
@@ -102,3 +102,20 @@ class CustomUserAdminTests(TestCase):
         self.assertIn("is_active", readonly_fields)
         self.assertIn("is_staff", readonly_fields)
         self.assertIn("is_superuser", readonly_fields)
+
+    def test_admin_does_not_expose_unused_permission_management(self) -> None:
+        """Hide group and individual permission management from the admin.
+
+        Args:
+            self: The test case instance.
+        """
+        configured_fields = {
+            field_name
+            for _heading, options in self.model_admin.fieldsets
+            for field_name in options["fields"]
+        }
+
+        self.assertFalse(admin.site.is_registered(Group))
+        self.assertNotIn("groups", configured_fields)
+        self.assertNotIn("user_permissions", configured_fields)
+        self.assertEqual(self.model_admin.filter_horizontal, ())

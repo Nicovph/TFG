@@ -93,6 +93,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'backend.audit.middleware.RequestIdMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -575,7 +576,6 @@ SESSION_SAVE_EVERY_REQUEST = get_boolean_setting(
     "DJANGO_SESSION_SAVE_EVERY_REQUEST",
     default=True,
 )
-# The CSRF cookie is used to protect against CSRF attacks.
 CSRF_COOKIE_SECURE = get_boolean_setting(
     "DJANGO_CSRF_COOKIE_SECURE",
     default=not DEBUG,

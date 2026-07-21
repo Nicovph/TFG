@@ -1,14 +1,20 @@
 """Administration configuration for federated user accounts.
 
 This module exposes read-only federated identity metadata and allows
-authorized administrators to manage account and permission state. Accounts
-cannot be created or deleted through the Django admin.
+authorized administrators to manage account authorization state. Accounts
+cannot be created or deleted through the Django admin, and unused group and
+individual permission management is not exposed.
 """
 
 from django.contrib import admin
+from django.contrib.auth.models import Group
 from django.http import HttpRequest
 
 from .models import CustomUser
+
+
+# Remove unused group management from the default Django admin site.
+admin.site.unregister(Group)
 
 
 @admin.register(CustomUser)
@@ -65,15 +71,10 @@ class CustomUserAdmin(admin.ModelAdmin):
                     "is_active",
                     "is_staff",
                     "is_superuser",
-                    "groups",
-                    "user_permissions",
                 )
             },
         ),
     )
-
-    # Use horizontal widgets for many-to-many relationship management.
-    filter_horizontal = ("groups", "user_permissions")
 
     @staticmethod
     def _can_manage_accounts(request: HttpRequest) -> bool:
