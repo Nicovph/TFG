@@ -11,6 +11,7 @@
 
 /* Shared design tokens keep colors, spacing, elevation, and focus treatment consistent. */
 :root {
+  color-scheme: light;
   --color-surface: #ffffff;
   --color-surface-translucent: rgba(255, 255, 255, 0.94);
   --color-text-primary: #4f4f59;
@@ -22,17 +23,17 @@
   --color-text-on-accent: #ffffff;
   --color-text-placeholder: #9696a0;
   --brand-gradient: linear-gradient(90deg, #805eff 0%, #8171ff 48%, #81deeb 100%);
-  --color-action-primary: #8a63ff;
-  --color-action-filled: #9d72f6;
+  --color-action-primary: #7651e6;
+  --color-action-filled: #7651e6;
   --color-action-contrast: #6d54d8;
   --color-action-contrast-soft: rgba(109, 84, 216, 0.18);
   --color-action-soft: #f8f3ff;
-  --color-support: #54d4e3;
+  --color-support: #287f8a;
   --color-support-deep: #287f8a;
-  --color-support-strong: #2b8a96;
+  --color-support-strong: #246f78;
   --color-support-soft: #e9fbfd;
   --color-support-soft-translucent: rgba(233, 251, 253, 0.88);
-  --color-account-surface: #5ed7df;
+  --color-account-surface: #257782;
   --color-focus-soft: rgba(84, 212, 227, 0.26);
   --color-border-accent-soft: #e3daf8;
   --color-border-muted: #b9b9c2;
@@ -116,6 +117,71 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Explicit dark preferences replace only semantic tokens, preserving component layout. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-surface: #17171d;
+  --color-surface-translucent: rgba(23, 23, 29, 0.94);
+  --color-text-primary: #f0f0f5;
+  --color-text-copy: #dedee6;
+  --color-text-input: #f7f7fa;
+  --color-text-secondary: #c7c7d1;
+  --color-text-strong: #ffffff;
+  --color-text-muted: #b9b9c4;
+  --color-text-placeholder: #b2b2bd;
+  --color-action-primary: #6845cc;
+  --color-action-filled: #7250d4;
+  --color-action-contrast: #d0c4ff;
+  --color-action-contrast-soft: rgba(208, 196, 255, 0.22);
+  --color-action-soft: #2d273d;
+  --color-support: #72e2ed;
+  --color-support-deep: #93ebf2;
+  --color-support-strong: #8de7ef;
+  --color-support-soft: #203b40;
+  --color-support-soft-translucent: rgba(32, 59, 64, 0.9);
+  --color-account-surface: #257782;
+  --color-focus-soft: rgba(114, 226, 237, 0.3);
+  --color-border-accent-soft: #51466c;
+  --color-border-muted: #747480;
+  --color-overlay: rgba(0, 0, 0, 0.58);
+  --color-overlay-soft: rgba(0, 0, 0, 0.42);
+  --color-status-shadow: rgba(114, 226, 237, 0.18);
+}
+
+/* System mode follows operating-system changes without storing a second local copy. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]),
+  :root[data-theme='system'] {
+    color-scheme: dark;
+    --color-surface: #17171d;
+    --color-surface-translucent: rgba(23, 23, 29, 0.94);
+    --color-text-primary: #f0f0f5;
+    --color-text-copy: #dedee6;
+    --color-text-input: #f7f7fa;
+    --color-text-secondary: #c7c7d1;
+    --color-text-strong: #ffffff;
+    --color-text-muted: #b9b9c4;
+    --color-text-placeholder: #b2b2bd;
+    --color-action-primary: #6845cc;
+    --color-action-filled: #7250d4;
+    --color-action-contrast: #d0c4ff;
+    --color-action-contrast-soft: rgba(208, 196, 255, 0.22);
+    --color-action-soft: #2d273d;
+    --color-support: #72e2ed;
+    --color-support-deep: #93ebf2;
+    --color-support-strong: #8de7ef;
+    --color-support-soft: #203b40;
+    --color-support-soft-translucent: rgba(32, 59, 64, 0.9);
+    --color-account-surface: #257782;
+    --color-focus-soft: rgba(114, 226, 237, 0.3);
+    --color-border-accent-soft: #51466c;
+    --color-border-muted: #747480;
+    --color-overlay: rgba(0, 0, 0, 0.58);
+    --color-overlay-soft: rgba(0, 0, 0, 0.42);
+    --color-status-shadow: rgba(114, 226, 237, 0.18);
+  }
+}
+
 /* Border-box sizing makes component dimensions include their padding and borders. */
 * {
   box-sizing: border-box;
@@ -126,6 +192,8 @@ body {
   min-width: var(--viewport-min-width);
   min-height: var(--page-min-height);
   margin: 0;
+  color: var(--color-text-primary);
+  background: var(--color-surface);
 }
 
 /* Form controls inherit the application typography instead of browser-specific defaults. */

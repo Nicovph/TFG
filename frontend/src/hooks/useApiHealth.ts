@@ -8,7 +8,6 @@ import type { ApiHealth } from '../types'
 
 interface ApiHealthHookResult {
   apiHealth: ApiHealth | null
-  apiReady: boolean
   apiStatusText: string
   healthError: boolean
 }
@@ -17,7 +16,7 @@ interface ApiHealthHookResult {
  * Load non-sensitive health metadata and expose display-ready status state.
  *
  * Returns:
- *   API health data, a ready flag, status copy, and an error flag.
+ *   API health data, status copy, and an error flag.
  */
 export function useApiHealth(): ApiHealthHookResult {
   const [apiHealth, setApiHealth] = useState<ApiHealth | null>(null)
@@ -56,7 +55,6 @@ export function useApiHealth(): ApiHealthHookResult {
 
   return {
     apiHealth,
-    apiReady: apiHealth?.status === 'ok',
     apiStatusText,
     healthError,
   }

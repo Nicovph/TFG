@@ -3,15 +3,48 @@
  * cookies in the browser and never stores OAuth/OIDC tokens.
  */
 
+import type {
+  PreferenceKey,
+  PreferenceState,
+} from './data/preferences'
 import type { ApiHealth, MockInterpretation, SessionStatus } from './types'
 
+// Keep this value synchronized with Django's effective CSRF_COOKIE_NAME setting,
+// whose default is "csrftoken". Reading it from the static Vite frontend also
+// requires CSRF_COOKIE_HTTPONLY and CSRF_USE_SESSIONS to remain false.
+const CSRF_COOKIE_NAME = 'csrftoken'
+
 interface ApiRequestOptions {
+  /**
+   * It is the HTTP body for preferences update.
+   */
+  body?: unknown
   /**
    * Indicate whether the request needs to include the CSRF token.
    */
   csrf?: boolean
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'PATCH' | 'POST'
   signal?: AbortSignal
+}
+
+/**
+ * Represent a non-successful HTTP response without retaining response details.
+ */
+export class ApiError extends Error {
+  readonly code = 'api_request_failed' as const
+  readonly status: number
+
+  /**
+   * Create an API error containing only a safe code and HTTP status.
+   *
+   * Args:
+   *   status: The HTTP response status returned by the internal API.
+   */
+  constructor(status: number) {
+    super('api_request_failed')
+    this.name = 'ApiError'
+    this.status = status
+  }
 }
 
 /**
@@ -26,7 +59,7 @@ interface ApiRequestOptions {
  */
 function isRecord(value: unknown): value is Record<string, unknown> {
   /**
-   * It is confirmed not to be an array because it is also of type 'object'.
+   * It is confirmed not to be an array because they are also of type 'object'.
    */
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -56,7 +89,7 @@ function isStringArray(value: unknown): value is string[] {
 function readCookie(name: string): string | null {
   const cookiePrefix = `${name}=`
   /**
-   * document.cookie returns all cookie as a single string seprated by ';' and split convert it into an array of parts.
+   * document.cookie returns all cookies as a single string separated by ';' and split convert it into an array of parts.
    */
   const cookieParts = document.cookie.split(';')
 
@@ -71,7 +104,7 @@ function readCookie(name: string): string | null {
          */
         return decodeURIComponent(trimmedCookie.slice(cookiePrefix.length))
         /**
-         * If malformed cookie, the decodification failed.
+         * If malformed cookie, the decoding failed.
          */
       } catch {
         return null
@@ -92,7 +125,7 @@ function readCookie(name: string): string | null {
  *   Error: If the CSRF cookie is unavailable.
  */
 function getCsrfToken(): string {
-  const token = readCookie('csrftoken')
+  const token = readCookie(CSRF_COOKIE_NAME)
 
   if (!token) {
     throw new Error('csrf_token_missing')
@@ -113,7 +146,8 @@ function getCsrfToken(): string {
  *
  * Raises:
  *   DOMException: If reading the response is cancelled through AbortController.
- *   Error: If the response status is unsuccessful or its body is not valid JSON.
+ *   ApiError: If the response status is unsuccessful.
+ *   Error: If the response body is not valid JSON.
  */
 async function fetchJson(path: string, options: ApiRequestOptions = {}): Promise<unknown> {
   /**
@@ -127,11 +161,16 @@ async function fetchJson(path: string, options: ApiRequestOptions = {}): Promise
     headers['X-CSRFToken'] = getCsrfToken()
   }
 
+  if (options.body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+  }
+
   const response = await fetch(path, {
     /**
      * The browser must send cookies only when the request is from the same origin.
      */
     credentials: 'same-origin',
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
     headers,
     /**
      * If no method is provided, it uses GET.
@@ -141,10 +180,13 @@ async function fetchJson(path: string, options: ApiRequestOptions = {}): Promise
   })
 
   if (!response.ok) {
-    throw new Error('api_request_failed')
+    throw new ApiError(response.status)
   }
 
   try {
+    /**
+     * Converts the body of an HTTP response from JSON format to a JavaScript object.
+     */
     return await response.json()
   } catch (error: unknown) {
     if (error instanceof DOMException && error.name === 'AbortError') {
@@ -156,6 +198,108 @@ async function fetchJson(path: string, options: ApiRequestOptions = {}): Promise
      */
     throw new Error('invalid_json_response', { cause: error })
   }
+}
+
+/**
+ * Parse and validate the minimized user preference payload.
+ *
+ * Args:
+ *   payload: The JSON value returned by Django.
+ *
+ * Returns:
+ *   The frontend preference representation.
+ *
+ * Raises:
+ *   Error: If the payload contains missing, extra, or invalid fields.
+ */
+function parseUserPreferences(payload: unknown): PreferenceState {
+  const expectedKeys = [
+    'visual_support_enabled',
+    'show_offensive_language',
+    'show_content_warnings',
+    'theme',
+    'interpretation_detail',
+  ] as const
+
+  if (
+    !isRecord(payload) ||
+    Object.keys(payload).length !== expectedKeys.length ||
+    !expectedKeys.every((key) => key in payload) ||
+    typeof payload.visual_support_enabled !== 'boolean' ||
+    typeof payload.show_offensive_language !== 'boolean' ||
+    typeof payload.show_content_warnings !== 'boolean' ||
+    (payload.theme !== 'light' && payload.theme !== 'dark' && payload.theme !== 'system') ||
+    (payload.interpretation_detail !== 'brief' &&
+      payload.interpretation_detail !== 'standard' &&
+      payload.interpretation_detail !== 'detailed')
+  ) {
+    throw new Error('invalid_user_preferences_payload')
+  }
+
+  return {
+    interpretationDetail: payload.interpretation_detail,
+    visualSupport: payload.visual_support_enabled ? 'enabled' : 'disabled',
+    offensiveLanguage: payload.show_offensive_language ? 'shown' : 'hidden',
+    contentWarnings: payload.show_content_warnings ? 'shown' : 'hidden',
+    theme: payload.theme,
+  }
+}
+
+/**
+ * For each key, define exactly which partial object will be sent to the backend.
+ */
+type PreferencePatchByKey = {
+  interpretationDetail: {
+    interpretation_detail: PreferenceState['interpretationDetail']
+  }
+  visualSupport: { visual_support_enabled: boolean }
+  offensiveLanguage: { show_offensive_language: boolean }
+  contentWarnings: { show_content_warnings: boolean }
+  theme: { theme: PreferenceState['theme'] }
+}
+
+/**
+ * A utility type representing any single-preference patch.
+ */
+type PreferencePatch = PreferencePatchByKey[PreferenceKey]
+
+/**
+ * A type that requires a serialization function for each preference key.
+ */
+type PreferenceSerializerMap = {
+  [K in PreferenceKey]: (value: PreferenceState[K]) => PreferencePatchByKey[K]
+}
+
+/**
+ * Serialize every supported UI preference into its one-field API patch.
+ *
+ * Each callback is contextually typed from the same preference key. Requiring
+ * every key in the mapped type makes additions to PreferenceState fail to
+ * compile until their serializer is implemented.
+ */
+const PREFERENCE_SERIALIZERS: PreferenceSerializerMap = {
+  interpretationDetail: (value) => ({ interpretation_detail: value }),
+  visualSupport: (value) => ({ visual_support_enabled: value === 'enabled' }),
+  offensiveLanguage: (value) => ({ show_offensive_language: value === 'shown' }),
+  contentWarnings: (value) => ({ show_content_warnings: value === 'shown' }),
+  theme: (value) => ({ theme: value }),
+}
+
+/**
+ * Convert one typed UI preference into the corresponding API field.
+ *
+ * Args:
+ *   key: The preference selected by the user.
+ *   value: The validated UI value for that preference.
+ *
+ * Returns:
+ *   A one-field partial update payload using backend field names.
+ */
+function serializePreferenceChange<K extends PreferenceKey>(
+  key: K,
+  value: PreferenceState[K],
+): PreferencePatch {
+  return PREFERENCE_SERIALIZERS[key](value)
 }
 
 /**
@@ -260,11 +404,16 @@ export async function getApiHealth(signal?: AbortSignal): Promise<ApiHealth> {
 /**
  * Load a fixed simulated interpretation from Django.
  *
+ * Args:
+ *   signal: Optional abort signal used to cancel an obsolete request.
+ *
  * Returns:
  *   A typed mock interpretation object.
  */
-export async function getMockInterpretation(): Promise<MockInterpretation> {
-  return parseMockInterpretation(await fetchJson('/api/interpretations/mock/'))
+export async function getMockInterpretation(signal?: AbortSignal): Promise<MockInterpretation> {
+  return parseMockInterpretation(
+    await fetchJson('/api/interpretations/mock/', { signal }),
+  )
 }
 
 /**
@@ -287,6 +436,45 @@ export async function getSessionStatus(signal?: AbortSignal): Promise<SessionSta
 }
 
 /**
+ * Load the authenticated user's minimized preference set.
+ *
+ * Args:
+ *   signal: Optional abort signal used to cancel obsolete requests.
+ *
+ * Returns:
+ *   The validated frontend preference state.
+ */
+export async function getUserPreferences(signal?: AbortSignal): Promise<PreferenceState> {
+  return parseUserPreferences(await fetchJson('/api/preferences/', { signal }))
+}
+
+/**
+ * Persist one preference for the authenticated Django session.
+ *
+ * Args:
+ *   key: The typed frontend preference key.
+ *   value: The validated value selected by the user.
+ *   signal: Optional abort signal used to cancel an obsolete update.
+ *
+ * Returns:
+ *   The complete validated preference state returned by Django.
+ */
+export async function updateUserPreference<K extends PreferenceKey>(
+  key: K,
+  value: PreferenceState[K],
+  signal?: AbortSignal,
+): Promise<PreferenceState> {
+  return parseUserPreferences(
+    await fetchJson('/api/preferences/', {
+      body: serializePreferenceChange(key, value),
+      csrf: true,
+      method: 'PATCH',
+      signal,
+    }),
+  )
+}
+
+/**
  * End the current Django session through a CSRF-protected POST.
  *
  * Returns:
@@ -296,7 +484,7 @@ export async function logoutSession(): Promise<SessionStatus> {
   return parseSessionStatus(
     await fetchJson('/api/auth/logout/', {
       /**
-       * csrf demonstrates that the POST originates from the legitimate application.
+       * Include Django's CSRF token for this unsafe same-origin request.
        */
       csrf: true,
       method: 'POST',

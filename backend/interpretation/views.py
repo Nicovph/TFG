@@ -44,10 +44,11 @@ def health(request: Request) -> Response:
         data={
             "status": "ok",
             "service": "django",
-            "api_version": "phase-2",
+            "api_version": "phase-4",
             "features": [
                 "health",
                 "mock_interpretation",
+                "user_preferences",
             ],
         }
     )

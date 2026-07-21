@@ -62,7 +62,7 @@ def provision_user_from_claims(claims: Mapping[str, object]) -> GoogleLoginResul
                 created = False
 
         if created:
-            UserPreferences.objects.get_or_create(user=user)
+            UserPreferences.objects.create(user=user)
             SecurityEvent.objects.record(
                 event_type=SecurityEventType.ACCOUNT_CREATED,
                 actor=user,

@@ -58,6 +58,7 @@ class GoogleOIDCProvisioningTests(TestCase):
         user = CustomUser.objects.create_user(
             google_subject="google-subject-provision-existing",
         )
+        preferences = UserPreferences.objects.create(user=user)
 
         result = services.provision_user_from_claims(
             {"sub": "google-subject-provision-existing"}
@@ -66,6 +67,10 @@ class GoogleOIDCProvisioningTests(TestCase):
         self.assertIsInstance(result, services.GoogleLoginResult)
         self.assertFalse(result.created)
         self.assertEqual(result.user, user)
+        self.assertEqual(
+            UserPreferences.objects.get(user=user),
+            preferences,
+        )
         self.assertFalse(
             SecurityEvent.objects.filter(
                 actor=user,

@@ -6,7 +6,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SubmitEvent } from 'react'
 import logoMark from './assets/Cerebro_logo_app.png'
-import { getMockInterpretation } from './api'
 import { AppHeader } from './components/AppHeader'
 import { Drawer } from './components/Drawer'
 import { HomeView } from './components/HomeView'
@@ -16,23 +15,23 @@ import { StatusView } from './components/StatusView'
 import { VisualSupportDialog } from './components/VisualSupportDialog'
 import { INFO_PAGES, isInfoView } from './data/infoPages'
 import type { AppView } from './data/infoPages'
-import { DEFAULT_PREFERENCES } from './data/preferences'
-import type { PreferenceChangeHandler, PreferenceState } from './data/preferences'
+import { useAuthFlowError } from './hooks/useAuthFlowError'
 import { useAuthSession } from './hooks/useAuthSession'
 import { useApiHealth } from './hooks/useApiHealth'
-import type { MockInterpretation } from './types'
+import {
+  MAX_MESSAGE_LENGTH,
+  useInterpretationWorkspace,
+} from './hooks/useInterpretationWorkspace'
+import { useUserPreferences } from './hooks/useUserPreferences'
+import {
+  readSessionStorage,
+  removeSessionStorage,
+  writeSessionStorage,
+} from './utils/sessionStorage'
 
-const MAX_MESSAGE_LENGTH = 500
 const VIEW_STORAGE_KEY = 'teaslator.currentView'
 // Use to remember if an info page must return to home or main.
 const INFO_RETURN_STORAGE_KEY = 'teaslator.infoReturnView'
-/** It serves to indicate that the user of the current tab voluntarily initiated
- * a Google authentication flow, allowing the marker to persist through the temporary
- * departure to Google and the return to the same tab, while preventing it from persisting
- * indefinitely.
- */
-const AUTH_ATTEMPT_STORAGE_KEY = 'teaslator.authAttemptPending'
-const AUTH_ERROR_FRAGMENT = '#auth-error'
 
 /**
  * Check whether a stored string matches a valid application view.
@@ -60,11 +59,7 @@ function isAppView(view: string | null): view is AppView {
  *   The last stored view, or home when no valid view has been stored.
  */
 function getStoredView(): AppView {
-  if (typeof window === 'undefined') {
-    return 'home'
-  }
-
-  const storedView = window.sessionStorage.getItem(VIEW_STORAGE_KEY)
+  const storedView = readSessionStorage(VIEW_STORAGE_KEY)
   return isAppView(storedView) ? storedView : 'home'
 }
 
@@ -75,59 +70,8 @@ function getStoredView(): AppView {
  *   The stored return target, or home when the stored value is invalid.
  */
 function getStoredInfoReturnView(): 'home' | 'main' {
-  if (typeof window === 'undefined') {
-    return 'home'
-  }
-
-  const storedReturnView = window.sessionStorage.getItem(INFO_RETURN_STORAGE_KEY)
+  const storedReturnView = readSessionStorage(INFO_RETURN_STORAGE_KEY)
   return storedReturnView === 'main' ? 'main' : 'home'
-}
-
-/**
- * Remove the generic authentication error marker (#auth-error) from the browser URL.
- * Prevents the user from seeing #auth-error in the address bar after viewing the message.
- */
-function clearAuthErrorFragment(): void {
-  /**
-   * If the window type is undefined or the hash (string containing '#' follow by the fragment identifier of the location URL) is not #auth-error.
-   */
-  if (typeof window === 'undefined' || window.location.hash !== AUTH_ERROR_FRAGMENT) {
-    return
-  }
-
-  /**
-   * history.replaceState is an API to modify the current URL without reload the page and without adding a new entrance in the browser history.
-   * null: The history status is not modified.
-   * document.title: Mantain the page title.
-   * The last argument rebuilds the URL without the hash.
-   */
-  window.history.replaceState(
-    null,
-    document.title,
-    `${window.location.pathname}${window.location.search}`,
-  )
-}
-
-/**
- * Check for an authentication error produced by a user-initiated flow.
- *
- * Returns:
- *   True only when the URL error marker and the local attempt marker are both present
- * (there was a recent error).
- * This prevents the error message from appearing when the user reloads the page or accesses a URL with #auth-error.
- */
-function hasAuthFlowError(): boolean {
-  if (typeof window === 'undefined') {
-    return false
-  }
-
-  /**
-   * Only return True if there is an error in the URL and there was a pending authentication attempt.
-   */
-  return (
-    window.location.hash === AUTH_ERROR_FRAGMENT &&
-    window.sessionStorage.getItem(AUTH_ATTEMPT_STORAGE_KEY) === 'true'
-  )
 }
 
 /**
@@ -142,20 +86,9 @@ function App() {
   const [infoReturnView, setInfoReturnView] = useState<'home' | 'main'>(() =>
     getStoredInfoReturnView(),
   )
-  /**
-   * It keeps the message in React memory only, due to the use of the useState hook.
-   */
-  const [message, setMessage] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
-  const [preferences, setPreferences] = useState<PreferenceState>(DEFAULT_PREFERENCES)
-  const [selectedVisualLabel, setSelectedVisualLabel] = useState<string | null>(null)
-  const [interpretation, setInterpretation] = useState<MockInterpretation | null>(null)
-  const [interpretationStatus, setInterpretationStatus] = useState<
-    'idle' | 'loading' | 'ready' | 'error'
-  >('idle')
-  const [authFlowError, setAuthFlowError] = useState(hasAuthFlowError)
   // These references restore focus only after returning from an informational page.
   const homeMenuButtonRef = useRef<HTMLButtonElement>(null)
   const workspaceMenuButtonRef = useRef<HTMLButtonElement>(null)
@@ -168,10 +101,30 @@ function App() {
     retrySessionCheck,
     startGoogleLogin,
   } = useAuthSession()
-  const { apiReady, apiStatusText } = useApiHealth()
+  const { authFlowError, beginAuthAttempt, clearAuthFlowState } =
+    useAuthFlowError(authStatus)
+  const {
+    canSubmit,
+    closeVisualSupport,
+    interpretation,
+    interpretationStatus,
+    message,
+    openVisualSupport,
+    remainingCharacters,
+    requestInterpretation,
+    resetInterpretationWorkspace,
+    selectedVisualLabel,
+    updateMessage,
+  } = useInterpretationWorkspace()
+  const {
+    preferences,
+    preferenceStatus,
+    resetPreferences,
+    retryPreferences,
+    updatePreference,
+  } = useUserPreferences(authStatus)
+  const { apiStatusText } = useApiHealth()
 
-  const remainingCharacters = MAX_MESSAGE_LENGTH - message.length
-  const canSubmit = message.trim().length > 0 && interpretationStatus !== 'loading'
   const renderedView: AppView =
     authStatus === 'authenticated' && currentView === 'home'
       ? 'main'
@@ -194,18 +147,30 @@ function App() {
       ? 'Volver al área de interpretación'
       : 'Volver a la página de inicio'
   const infoPage = isInfoView(renderedView) ? INFO_PAGES[renderedView] : null
-  const showVisualSupport = preferences.visualSupport === 'enabled' && interpretation !== null
+  const showVisualSupport =
+    preferences.visualSupport === 'enabled' &&
+    interpretationStatus === 'ready' &&
+    interpretation !== null
 
   /**
    * Updates the storage whenever the view changes.
    */
   useEffect(() => {
-    window.sessionStorage.setItem(VIEW_STORAGE_KEY, currentView)
+    writeSessionStorage(VIEW_STORAGE_KEY, currentView)
   }, [currentView])
 
   useEffect(() => {
-    window.sessionStorage.setItem(INFO_RETURN_STORAGE_KEY, infoReturnView)
+    writeSessionStorage(INFO_RETURN_STORAGE_KEY, infoReturnView)
   }, [infoReturnView])
+
+  /**
+   * Applies the user's theme preference globally by setting the data-theme
+   * attribute on the document root (<html> element). This enables theme-based
+   * CSS selectors across all application views.
+   */
+  useEffect(() => {
+    document.documentElement.dataset.theme = preferences.theme
+  }, [preferences.theme])
 
   useEffect(() => {
     const pendingDestination = pendingInfoReturnFocusRef.current
@@ -219,37 +184,37 @@ function App() {
 
     if (focusTarget) {
       focusTarget.focus()
-      pendingInfoReturnFocusRef.current = null
     }
+
+    // Do not retain an impossible focus request if the destination has no target.
+    pendingInfoReturnFocusRef.current = null
   }, [renderedView])
 
+  /**
+   * Remove transient content if Django explicitly resolves the session as absent.
+   * A temporary session-check error deliberately preserves the visible workspace.
+   */
   useEffect(() => {
-    if (window.location.hash !== AUTH_ERROR_FRAGMENT) {
+    if (authStatus !== 'unauthenticated') {
       return
     }
 
-    window.sessionStorage.removeItem(AUTH_ATTEMPT_STORAGE_KEY)
-    clearAuthErrorFragment()
-  }, [])
-
-  /**
-   * Prevents the mark from persisting after the check is resolved.
-   */
-  useEffect(() => {
-    if (authStatus !== 'checking') {
-      window.sessionStorage.removeItem(AUTH_ATTEMPT_STORAGE_KEY)
-    }
-  }, [authStatus])
+    resetInterpretationWorkspace()
+    resetPreferences()
+  }, [authStatus, resetInterpretationWorkspace, resetPreferences])
 
   /**
    * Close overlays and popovers that should not survive navigation.
    * Prevents floating elements from persisting when switching views.
+   *
+   * Returns:
+   *   Nothing.
    */
   const closeTransientPanels = () => {
     setMenuOpen(false)
     setSettingsOpen(false)
     setAccountOpen(false)
-    setSelectedVisualLabel(null)
+    closeVisualSupport()
   }
 
   /**
@@ -290,11 +255,13 @@ function App() {
 
   /**
    * Start the backend-managed Google authentication flow.
+   *
+   * Returns:
+   *   Nothing.
    */
   const handleGoogleEntry = () => {
     closeTransientPanels()
-    setAuthFlowError(false)
-    window.sessionStorage.setItem(AUTH_ATTEMPT_STORAGE_KEY, 'true')
+    beginAuthAttempt()
     startGoogleLogin()
   }
 
@@ -333,39 +300,41 @@ function App() {
 
   /**
    * Return to the start screen and clear transient user-entered state.
+   *
+   * Returns:
+   *   Nothing.
    */
   const clearLocalSessionState = () => {
     closeTransientPanels()
-    window.sessionStorage.removeItem(VIEW_STORAGE_KEY)
-    window.sessionStorage.removeItem(INFO_RETURN_STORAGE_KEY)
-    window.sessionStorage.removeItem(AUTH_ATTEMPT_STORAGE_KEY)
-    setAuthFlowError(false)
-    setMessage('')
-    setInterpretation(null)
-    setInterpretationStatus('idle')
-    setPreferences(DEFAULT_PREFERENCES)
+    // Clear user-entered data before touching optional browser storage.
+    resetInterpretationWorkspace()
+    resetPreferences()
     setInfoReturnView('home')
     setCurrentView('home')
+    clearAuthFlowState()
+    removeSessionStorage(VIEW_STORAGE_KEY)
+    removeSessionStorage(INFO_RETURN_STORAGE_KEY)
   }
 
   /**
    * Request backend logout and clear transient user-entered state on success.
+   *
+   * Returns:
+   *   A promise that resolves after success or after exposing a recoverable error.
    */
-  const handleLogout = () => {
-    logout()
-      .then(() => {
-        clearLocalSessionState()
-      })
-      .catch(() => {
-        return undefined
-      })
+  const handleLogout = async () => {
+    try {
+      await logout()
+      clearLocalSessionState()
+    } catch {
+      // useAuthSession exposes logoutStatus === 'error' for accessible recovery UI.
+    }
   }
 
   /**
    * Leave a recoverable authentication error and return to the start screen.
    */
   const handleReturnHomeFromAuthError = () => {
-    setAuthFlowError(false)
     clearLocalSessionState()
   }
 
@@ -378,58 +347,18 @@ function App() {
   }
 
   /**
-   * Update a typed local preference value.
-   *
-   * Args:
-   *   key: The preference field being changed.
-   *   value: The validated value for that field.
-   */
-  const handlePreferenceChange: PreferenceChangeHandler = (key, value) => {
-    setPreferences((current) => ({
-      ...current, // Spread the current preferences to retain unchanged values.
-      [key]: value, // Update the specific preference field with the new value.
-    }))
-  }
-
-  /**
-   * Update the message and clear stale interpretation output when input is empty.
-   *
-   * Args:
-   *   nextMessage: The latest text entered by the user.
-   */
-  const handleMessageChange = (nextMessage: string) => {
-    setMessage(nextMessage)
-
-    if (nextMessage.trim().length === 0) {
-      setInterpretation(null)
-      setInterpretationStatus('idle')
-      setSelectedVisualLabel(null)
-    }
-  }
-
-  /**
    * Submit the local form and request a fixed mock result without sending text.
    *
    * Args:
    *   event: The form submission event.
+   *
+   * Returns:
+   *   Nothing.
    */
   const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    if (!canSubmit) {
-      return
-    }
-
-    setInterpretationStatus('loading')
-
-    getMockInterpretation()
-      .then((payload) => { // Promise.then(callback). It allows asynchronous code to be executed sequentially.
-        setInterpretation(payload)
-        setInterpretationStatus('ready')
-      })
-      .catch(() => {
-        setInterpretationStatus('error')
-      })
+    void requestInterpretation()
   }
 
   if (authFlowError) {
@@ -510,19 +439,20 @@ function App() {
           <main>
             <AppHeader
               accountOpen={accountOpen}
-              apiReady={apiReady}
               apiStatusText={apiStatusText}
               logoutStatus={logoutStatus}
               menuButtonRef={workspaceMenuButtonRef}
               menuOpen={menuOpen}
               preferences={preferences}
+              preferenceStatus={preferenceStatus}
               settingsOpen={settingsOpen}
               onAccountToggle={handleAccountToggle}
               onClosePopovers={closePopovers}
               onLogout={handleLogout}
               onMenuToggle={handleMenuToggle}
               onNavigateWorkspace={() => handleNavigate('main')}
-              onPreferenceChange={handlePreferenceChange}
+              onPreferenceChange={updatePreference}
+              onPreferencesRetry={retryPreferences}
               onSettingsToggle={handleSettingsToggle}
             />
             <InterpretationWorkspace
@@ -534,8 +464,8 @@ function App() {
               message={message}
               remainingCharacters={remainingCharacters}
               showVisualSupport={showVisualSupport}
-              onVisualSupportOpen={setSelectedVisualLabel}
-              onMessageChange={handleMessageChange}
+              onVisualSupportOpen={openVisualSupport}
+              onMessageChange={updateMessage}
               onSubmit={handleSubmit}
             />
           </main>
@@ -548,7 +478,7 @@ function App() {
         <VisualSupportDialog
           visualLabel={selectedVisualLabel}
           logoSrc={logoMark}
-          onClose={() => setSelectedVisualLabel(null)}
+          onClose={closeVisualSupport}
         />
       ) : null}
     </>

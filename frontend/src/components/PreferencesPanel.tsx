@@ -1,6 +1,6 @@
 /**
- * PreferencesPanel.tsx renders local preference controls using the same closed
- * option sets as the backend-facing preference model.
+ * PreferencesPanel.tsx renders authenticated preference controls backed by
+ * the validated Django preference API.
  */
 
 import {
@@ -9,6 +9,7 @@ import {
   type PreferenceChangeHandler,
   type PreferenceState,
 } from '../data/preferences'
+import type { PreferenceRequestStatus } from '../hooks/useUserPreferences'
 import styles from './PreferencesPanel.module.css'
 
 export const SETTINGS_PANEL_ID = 'settings-panel'
@@ -16,7 +17,9 @@ export const SETTINGS_PANEL_ID = 'settings-panel'
 interface PreferencesPanelProps {
   open: boolean
   preferences: PreferenceState
+  status: PreferenceRequestStatus
   onPreferenceChange: PreferenceChangeHandler
+  onRetry: () => void
 }
 
 /**
@@ -31,11 +34,27 @@ interface PreferencesPanelProps {
 export function PreferencesPanel({
   open,
   preferences,
+  status,
   onPreferenceChange,
+  onRetry,
 }: PreferencesPanelProps) {
   if (!open) {
     return null
   }
+
+  const controlsDisabled =
+    status === 'loading' || status === 'saving' || status === 'load-error'
+  const statusMessage =
+    status === 'loading'
+      ? 'Cargando preferencias…'
+      : status === 'saving'
+        ? 'Guardando cambios…'
+        : status === 'load-error'
+          ? 'No se pudieron cargar tus preferencias.'
+          : status === 'save-error'
+            ? 'No se pudo confirmar si el cambio se guardó. Se ha restaurado el valor anterior en la pantalla.'
+            : null
+  const hasError = status === 'load-error' || status === 'save-error'
 
   return (
     <section
@@ -44,28 +63,29 @@ export function PreferencesPanel({
       aria-label="Preferencias"
     >
       {PREFERENCE_GROUPS.map((group) => (
-        /* // Creates a label for each selector. */
+        /* Creates a label for each selector. */
         <label
           className={styles.preferenceField}
           key={group.id}
           htmlFor={`preference-${group.id}`}
         >
           <span className={styles.preferenceLabel}>{group.label}</span>
-          {/* // Coincides with the label's htmlFor for accessibility. */}
+          {/* Coincides with the label's htmlFor for accessibility. */}
           <select
+            disabled={controlsDisabled}
             id={`preference-${group.id}`}
             value={preferences[group.id]}
             onChange={(event) => {
               const nextValue = parsePreferenceValue(group.id, event.target.value)
 
               if (nextValue !== null) {
-                // Only if the value is valid, call the change handler.
+                {/* Only if the value is valid, call the change handler. */}
                 onPreferenceChange(group.id, nextValue)
               }
             }}
           >
             {group.options.map((option) => (
-              /* // option.value: Intern value. */
+              /* // option.value: Internal value. */
               <option value={option.value} key={option.value}>
                 {/* // Visible text. */}
                 {option.label}
@@ -74,6 +94,16 @@ export function PreferencesPanel({
           </select>
         </label>
       ))}
+      {statusMessage ? (
+        <div className={hasError ? styles.errorStatus : styles.requestStatus}>
+          <span role={hasError ? 'alert' : 'status'}>{statusMessage}</span>
+          {hasError ? (
+            <button className={styles.retryButton} type="button" onClick={onRetry}>
+              Recargar preferencias
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   )
 }

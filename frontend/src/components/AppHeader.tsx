@@ -13,18 +13,19 @@ import visuallyHiddenStyles from './VisuallyHidden.module.css'
 import settingsIcon from '../assets/engranaje_configuraciones.png'
 import type { PreferenceChangeHandler, PreferenceState } from '../data/preferences'
 import type { LogoutStatus } from '../hooks/useAuthSession'
-/**
- * import type is used to import only the type definitions used in compile time for typing.
- */
+import type { PreferenceRequestStatus } from '../hooks/useUserPreferences'
 
 interface AppHeaderProps {
   accountOpen: boolean
-  apiReady: boolean
   apiStatusText: string
   logoutStatus: LogoutStatus
   menuButtonRef: Ref<HTMLButtonElement>
-  menuOpen: boolean // If the drawer is opened.
+  /**
+   * Whether the modal navigation drawer is open.
+   */
+  menuOpen: boolean
   preferences: PreferenceState
+  preferenceStatus: PreferenceRequestStatus
   settingsOpen: boolean
   onAccountToggle: () => void
   onClosePopovers: () => void
@@ -32,6 +33,7 @@ interface AppHeaderProps {
   onMenuToggle: () => void
   onNavigateWorkspace: () => void
   onPreferenceChange: PreferenceChangeHandler
+  onPreferencesRetry: () => void
   onSettingsToggle: () => void
 }
 
@@ -46,12 +48,12 @@ interface AppHeaderProps {
  */
 export function AppHeader({
   accountOpen,
-  apiReady,
   apiStatusText,
   logoutStatus,
   menuButtonRef,
   menuOpen,
   preferences,
+  preferenceStatus,
   settingsOpen,
   onAccountToggle,
   onClosePopovers,
@@ -59,6 +61,7 @@ export function AppHeader({
   onMenuToggle,
   onNavigateWorkspace,
   onPreferenceChange,
+  onPreferencesRetry,
   onSettingsToggle,
 }: AppHeaderProps) {
   return (
@@ -92,14 +95,7 @@ export function AppHeader({
         {/**
          * The status role announces API availability changes without interrupting the user.
         */}
-        <span
-          className={
-            apiReady
-              ? `${visuallyHiddenStyles.visuallyHidden} ${styles.ready}`
-              : visuallyHiddenStyles.visuallyHidden
-          }
-          role="status"
-        >
+        <span className={visuallyHiddenStyles.visuallyHidden} role="status">
           {apiStatusText}
         </span>
         {/**
@@ -128,7 +124,9 @@ export function AppHeader({
           <PreferencesPanel
             open={settingsOpen}
             preferences={preferences}
+            status={preferenceStatus}
             onPreferenceChange={onPreferenceChange}
+            onRetry={onPreferencesRetry}
           />
         </div>
         <AccountMenu

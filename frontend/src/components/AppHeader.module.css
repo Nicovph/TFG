@@ -61,10 +61,6 @@
   gap: var(--space-sm);
 }
 
-.ready {
-  color: var(--color-support-strong);
-}
-
 /* Keep settings above the account layer so its tooltip remains visible on mobile. */
 .settingsArea {
   position: relative;

@@ -27,6 +27,8 @@ class InitialApiTests(SimpleTestCase):
         payload = response.data
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["service"], "django")
+        self.assertEqual(payload["api_version"], "phase-4")
+        self.assertIn("user_preferences", payload["features"])
         self.assertNotIn("POSTGRES_PASSWORD", json.dumps(payload)) # json.dumps serializes Python objects to a string with JSON format.
 
     def test_health_endpoint_rejects_post(self) -> None:
