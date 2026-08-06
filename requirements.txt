@@ -1,6 +1,9 @@
 Django==6.0.6
 djangorestframework==3.17.1
 google-auth>=2.40,<3.0
+groq>=1.5,<2.0
+pydantic>=2.13,<3.0
 python-dotenv>=1.0,<2.0
 psycopg[binary]>=3.2,<4.0
 requests>=2.32,<3.0
+httpx>=0.23,<1.0

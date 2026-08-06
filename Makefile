@@ -4,6 +4,11 @@
 # This can be overridden by setting the PYTHON environment variable.
 PYTHON ?= python3
 
+# Keep tests isolated from real provider credentials and network configuration.
+TEST_ENV = DJANGO_DB_PROFILE=test LLM_PROVIDER_REQUIRED=false \
+	GROQ_API_KEY= GROQ_API_KEY_FILE= \
+	LLM_QUOTA_HMAC_KEY= LLM_QUOTA_HMAC_KEY_FILE=
+
 # Declare non-file targets so Make does not treat them as real files.
 .PHONY: run migrate makemigrations check test test1 test2 test3 test4
 
@@ -21,16 +26,16 @@ check:
 	DJANGO_DB_PROFILE=app $(PYTHON) manage.py check
 
 test:
-	DJANGO_DB_PROFILE=test $(PYTHON) manage.py test
+	$(TEST_ENV) $(PYTHON) manage.py test
 
 test1:
-	DJANGO_DB_PROFILE=test $(PYTHON) manage.py test backend/accounts
+	$(TEST_ENV) $(PYTHON) manage.py test backend/accounts
 
 test2:
-	DJANGO_DB_PROFILE=test $(PYTHON) manage.py test backend/audit
+	$(TEST_ENV) $(PYTHON) manage.py test backend/audit
 
 test3:
-	DJANGO_DB_PROFILE=test $(PYTHON) manage.py test backend/preferences
+	$(TEST_ENV) $(PYTHON) manage.py test backend/preferences
 
 test4:
-	DJANGO_DB_PROFILE=test $(PYTHON) manage.py test backend/interpretation
+	$(TEST_ENV) $(PYTHON) manage.py test backend/interpretation

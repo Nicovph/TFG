@@ -67,6 +67,12 @@ services:
       dockerfile: docker/django/Dockerfile
     init: true # Docker executs a little init process inside the container to manage correctly signals and child processes.
     restart: unless-stopped
+    # Bound operational stdout/stderr retention and rotate logs automatically.
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       db:
         condition: service_healthy
@@ -78,6 +84,38 @@ services:
       GOOGLE_OIDC_CLIENT_ID: ${GOOGLE_OIDC_CLIENT_ID:?Set GOOGLE_OIDC_CLIENT_ID in .env}
       GOOGLE_OIDC_CLIENT_SECRET_FILE: /run/secrets/google_oidc_client_secret
       GOOGLE_OIDC_REDIRECT_URI: ${GOOGLE_OIDC_REDIRECT_URI:?Set GOOGLE_OIDC_REDIRECT_URI in .env}
+      GROQ_API_KEY_FILE: /run/secrets/groq_api_key
+      LLM_QUOTA_HMAC_KEY_FILE: /run/secrets/llm_quota_hmac_key
+      GROQ_MODEL: ${GROQ_MODEL:-}
+      # Fail before serving HTTP if either backend-only LLM secret is absent.
+      LLM_PROVIDER_REQUIRED: "true"
+      # Empty optional values delegate defaults and validation to Django,
+      # avoiding a second, drift-prone configuration source in Compose.
+      LLM_MAX_INPUT_CHARACTERS: ${LLM_MAX_INPUT_CHARACTERS:-}
+      LLM_MAX_COMPLETION_TOKENS: ${LLM_MAX_COMPLETION_TOKENS:-}
+      LLM_MAX_VISUAL_CONCEPTS: ${LLM_MAX_VISUAL_CONCEPTS:-}
+      LLM_MAX_VISUAL_CONCEPT_CHARACTERS: ${LLM_MAX_VISUAL_CONCEPT_CHARACTERS:-}
+      LLM_CONNECT_TIMEOUT_SECONDS: ${LLM_CONNECT_TIMEOUT_SECONDS:-}
+      LLM_READ_TIMEOUT_SECONDS: ${LLM_READ_TIMEOUT_SECONDS:-}
+      LLM_MAX_ATTEMPTS: ${LLM_MAX_ATTEMPTS:-}
+      LLM_RETRY_BASE_MILLISECONDS: ${LLM_RETRY_BASE_MILLISECONDS:-}
+      LLM_MAX_RETRY_DELAY_SECONDS: ${LLM_MAX_RETRY_DELAY_SECONDS:-}
+      LLM_TOTAL_TIMEOUT_SECONDS: ${LLM_TOTAL_TIMEOUT_SECONDS:-}
+      LLM_MAX_CONCURRENT_PROVIDER_CALLS_PER_PROCESS: ${LLM_MAX_CONCURRENT_PROVIDER_CALLS_PER_PROCESS:-}
+      LLM_DUPLICATE_CACHE_ALIAS: ${LLM_DUPLICATE_CACHE_ALIAS:-}
+      LLM_REQUIRE_SHARED_DUPLICATE_CACHE: ${LLM_REQUIRE_SHARED_DUPLICATE_CACHE:-}
+      LLM_DUPLICATE_TTL_SECONDS: ${LLM_DUPLICATE_TTL_SECONDS:-}
+      LLM_INTERPRETATION_ATTEMPTS_PER_MINUTE: ${LLM_INTERPRETATION_ATTEMPTS_PER_MINUTE:-}
+      LLM_INTERPRETATION_ATTEMPTS_PER_DAY: ${LLM_INTERPRETATION_ATTEMPTS_PER_DAY:-}
+      LLM_RATE_LIMIT_STATE_RETENTION_DAYS: ${LLM_RATE_LIMIT_STATE_RETENTION_DAYS:-}
+      LLM_USER_REQUESTS_PER_MINUTE: ${LLM_USER_REQUESTS_PER_MINUTE:-}
+      LLM_USER_REQUESTS_PER_DAY: ${LLM_USER_REQUESTS_PER_DAY:-}
+      LLM_USER_TOKENS_PER_MINUTE: ${LLM_USER_TOKENS_PER_MINUTE:-}
+      LLM_USER_TOKENS_PER_DAY: ${LLM_USER_TOKENS_PER_DAY:-}
+      LLM_GLOBAL_REQUESTS_PER_MINUTE: ${LLM_GLOBAL_REQUESTS_PER_MINUTE:-}
+      LLM_GLOBAL_REQUESTS_PER_DAY: ${LLM_GLOBAL_REQUESTS_PER_DAY:-}
+      LLM_GLOBAL_TOKENS_PER_MINUTE: ${LLM_GLOBAL_TOKENS_PER_MINUTE:-}
+      LLM_GLOBAL_TOKENS_PER_DAY: ${LLM_GLOBAL_TOKENS_PER_DAY:-}
       POSTGRES_DB: traductor_tea_db
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
@@ -90,6 +128,12 @@ services:
 
       - source: google_oidc_client_secret
         target: google_oidc_client_secret
+
+      - source: groq_api_key
+        target: groq_api_key
+
+      - source: llm_quota_hmac_key
+        target: llm_quota_hmac_key
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck: # Checks periodically if Django is working.
@@ -147,6 +191,12 @@ secrets:
 
   google_oidc_client_secret:
     file: ./.secrets/google-oidc-client-secret.txt
+
+  groq_api_key:
+    file: ./.secrets/groq-api-key.txt
+
+  llm_quota_hmac_key:
+    file: ./.secrets/llm-quota-hmac-key.txt
 
 volumes:
   postgres_data:

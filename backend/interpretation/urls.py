@@ -12,4 +12,9 @@ urlpatterns = [
         views.mock_interpretation,
         name="api-mock-interpretation",
     ),
+    path(
+        "interpretations/",
+        views.InterpretationView.as_view(),
+        name="api-interpretation",
+    ),
 ]

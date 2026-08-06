@@ -48,7 +48,7 @@ def get_database_credentials_file(
 
         if not override_path.is_absolute():
             raise ImproperlyConfigured(
-                f"{override_name} must be an absolute path."
+                f"{override_name} debe ser una ruta absoluta."
             )
 
         # For Docekr (/run/secrets/...)
@@ -68,6 +68,56 @@ SECRET_KEY = 'django-insecure-y=j0#1e20l)f(%69arj=(zw*ivg70#ni*jn!bghmgh4rpcd=n=
 DEBUG = True
 
 ALLOWED_HOSTS = []
+
+
+# Emit only minimized LLM operational metadata to the container standard output.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "llm_operational": {
+            # Include only severity, logger name, and the pre-sanitized event.
+            "format": "{levelname} {name} {message}",
+            # str format style.
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "llm_console": {
+            "class": "logging.StreamHandler",
+            "formatter": "llm_operational",
+            "level": "INFO",
+            "stream": "ext://sys.stdout",
+        },
+    },
+    "loggers": {
+        "backend.interpretation.provider": {
+            "handlers": ["llm_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "backend.interpretation.services": {
+            "handlers": ["llm_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "backend.interpretation.throttles": {
+            "handlers": ["llm_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "backend.interpretation.rate_limit_audit": {
+            "handlers": ["llm_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "backend.audit.services": {
+            "handlers": ["llm_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
 
 
 # Application definition
@@ -181,8 +231,8 @@ if DATABASE_PROFILE not in DATABASE_PROFILES:
     allowed_profiles = ", ".join(sorted(DATABASE_PROFILES))
 
     raise ImproperlyConfigured(
-        f"Invalid DJANGO_DB_PROFILE: {DATABASE_PROFILE!r}. "
-        f"Allowed values: {allowed_profiles}."
+        f"DJANGO_DB_PROFILE no válido: {DATABASE_PROFILE!r}. "
+        f"Valores permitidos: {allowed_profiles}."
     )
 
 
@@ -248,7 +298,7 @@ def get_secret_setting(name: str, file_name: str) -> str:
 
     if direct_value and configured_file:
         raise ImproperlyConfigured(
-            f"Configure only one of {name} or {file_name}."
+            f"Solo debe configurarse uno de estos valores: {name} o {file_name}."
         )
 
     if direct_value:
@@ -259,7 +309,8 @@ def get_secret_setting(name: str, file_name: str) -> str:
             or "\r" in direct_value
         ):
             raise ImproperlyConfigured(
-                f"The secret configured by {name} must be one valid line."
+                f"El secreto configurado mediante {name} debe constar de una "
+                "única línea válida."
             )
 
         return direct_value
@@ -271,7 +322,7 @@ def get_secret_setting(name: str, file_name: str) -> str:
     secret_path = Path(configured_file)
 
     if not secret_path.is_absolute():
-        raise ImproperlyConfigured(f"{file_name} must be an absolute path.")
+        raise ImproperlyConfigured(f"{file_name} debe ser una ruta absoluta.")
 
     try:
         # Open in binary mode for the bytes control.
@@ -281,19 +332,20 @@ def get_secret_setting(name: str, file_name: str) -> str:
             raw_secret = secret_file.read(MAX_SECRET_FILE_BYTES + 1)
     except OSError as exc:
         raise ImproperlyConfigured(
-            f"Unable to read the secret configured by {file_name}."
+            f"No se pudo leer el secreto configurado mediante {file_name}."
         ) from exc
 
     if len(raw_secret) > MAX_SECRET_FILE_BYTES:
         raise ImproperlyConfigured(
-            f"The secret configured by {file_name} is too large."
+            f"El secreto configurado mediante {file_name} es demasiado grande."
         )
 
     try:
         secret_value = raw_secret.decode("utf-8").strip()
     except UnicodeDecodeError as exc:
         raise ImproperlyConfigured(
-            f"The secret configured by {file_name} must be UTF-8."
+            f"El secreto configurado mediante {file_name} debe estar codificado "
+            "en UTF-8."
         ) from exc
 
     if (
@@ -303,7 +355,8 @@ def get_secret_setting(name: str, file_name: str) -> str:
         or "\r" in secret_value
     ):
         raise ImproperlyConfigured(
-            f"The secret configured by {file_name} must be one non-empty line."
+            f"El secreto configurado mediante {file_name} debe constar de una "
+            "única línea no vacía."
         )
 
     return secret_value
@@ -325,7 +378,7 @@ def get_required_setting(name: str) -> str:
 
     if value is None or not str(value).strip():
         raise ImproperlyConfigured(
-            f"Missing required database setting: {name}"
+            f"Falta la configuración obligatoria de la base de datos: {name}"
         )
 
     return str(value).strip()
@@ -338,11 +391,11 @@ def get_integer_setting(
     minimum: int = 0,
     maximum: int | None = None,
 ) -> int:
-    """Parse and validate an integer database configuration value.
+    """Parse and validate an optional integer configuration value.
     
     Args:
         name: The name of the configuration setting to retrieve.
-        default: The default value to use if the setting is not found.
+        default: Value used when the setting is missing or empty.
         minimum: The minimum allowed value (inclusive). Defaults to 0.
         maximum: The maximum allowed value (inclusive). Defaults to None (no limit).
     
@@ -353,23 +406,28 @@ def get_integer_setting(
         ImproperlyConfigured: If the value cannot be parsed as an integer, or if
             it falls outside the minimum/maximum range.
     """
-    raw_value = aplication_config.get(name, str(default))
+    raw_value = aplication_config.get(name)
+
+    # Empty optional entries in `.env` and Docker Compose mean "use the
+    # application default"; non-empty values still receive strict validation.
+    if raw_value is None or not str(raw_value).strip():
+        return default
 
     try:
-        value = int(raw_value)
+        value = int(str(raw_value).strip())
     except (TypeError, ValueError) as exc:
         raise ImproperlyConfigured(
-            f"Database setting {name} must be an integer."
+            f"El valor de configuración {name} debe ser un número entero."
         ) from exc
 
     if value < minimum:
         raise ImproperlyConfigured(
-            f"Database setting {name} must be at least {minimum}."
+            f"El valor de configuración {name} debe ser al menos {minimum}."
         )
 
     if maximum is not None and value > maximum:
         raise ImproperlyConfigured(
-            f"Database setting {name} must not exceed {maximum}."
+            f"El valor de configuración {name} no debe superar {maximum}."
         )
 
     return value
@@ -405,7 +463,7 @@ def get_boolean_setting(name: str, *, default: bool) -> bool:
 
     # Django does not boot if a boolean setting is misconfigured.
     raise ImproperlyConfigured(
-        f"Configuration setting {name} must be a boolean."
+        f"El valor de configuración {name} debe ser booleano."
     )
 
 
@@ -431,7 +489,7 @@ def get_cookie_samesite_setting(name: str, *, default: str) -> str:
             return allowed_value
 
     raise ImproperlyConfigured(
-        f"Configuration setting {name} must be one of: "
+        f"El valor de configuración {name} debe ser uno de estos valores: "
         + ", ".join(sorted(allowed_values))
     )
 
@@ -441,8 +499,8 @@ expected_database_user = DATABASE_PROFILES[DATABASE_PROFILE]["expected_user"]
 
 if database_user != expected_database_user:
     raise ImproperlyConfigured(
-        f"Database profile {DATABASE_PROFILE!r} must use "
-        f"{expected_database_user!r}, not {database_user!r}."
+        f"El perfil de base de datos {DATABASE_PROFILE!r} debe usar "
+        f"{expected_database_user!r}, no {database_user!r}."
     )
 
 # Parse common database connection parameters with safe defaults.
@@ -483,7 +541,7 @@ ssl_mode = aplication_config.get(
 
 if ssl_mode not in allowed_ssl_modes:
     raise ImproperlyConfigured(
-        "Invalid POSTGRES_SSLMODE. Allowed values: "
+        "POSTGRES_SSLMODE no válido. Valores permitidos: "
         + ", ".join(sorted(allowed_ssl_modes))
     )
 
@@ -587,22 +645,23 @@ CSRF_COOKIE_SAMESITE = get_cookie_samesite_setting(
 # Django does not boot if session cookie secure is false in production (DEBUG=False).
 if not DEBUG and not SESSION_COOKIE_SECURE:
     raise ImproperlyConfigured(
-        "DJANGO_SESSION_COOKIE_SECURE must be enabled when DEBUG is False."
+        "DJANGO_SESSION_COOKIE_SECURE debe estar habilitado cuando DEBUG es False."
     )
 
 if not DEBUG and not CSRF_COOKIE_SECURE:
     raise ImproperlyConfigured(
-        "DJANGO_CSRF_COOKIE_SECURE must be enabled when DEBUG is False."
+        "DJANGO_CSRF_COOKIE_SECURE debe estar habilitado cuando DEBUG es False."
     )
 
 if SESSION_COOKIE_SAMESITE == "None" and not SESSION_COOKIE_SECURE:
     raise ImproperlyConfigured(
-        "SESSION_COOKIE_SECURE is required when SESSION_COOKIE_SAMESITE is None."
+        "SESSION_COOKIE_SECURE es obligatorio cuando SESSION_COOKIE_SAMESITE "
+        "es None."
     )
 
 if CSRF_COOKIE_SAMESITE == "None" and not CSRF_COOKIE_SECURE:
     raise ImproperlyConfigured(
-        "CSRF_COOKIE_SECURE is required when CSRF_COOKIE_SAMESITE is None."
+        "CSRF_COOKIE_SECURE es obligatorio cuando CSRF_COOKIE_SAMESITE es None."
     )
 
 # Avoid leaking OAuth/OIDC callback query parameters through outbound referrers.
@@ -686,3 +745,273 @@ GOOGLE_OIDC_MAX_IAT_SKEW_SECONDS = get_integer_setting(
     minimum=0,
     maximum=900,
 )
+
+
+# Groq LLM configuration. The API key is intentionally optional at process
+# start so migrations and offline tests do not require provider credentials.
+GROQ_API_KEY = get_secret_setting(
+    "GROQ_API_KEY",
+    "GROQ_API_KEY_FILE",
+)
+# This backend-only secret protects quota subjects and transient LLM-control
+# identifiers independently from Django signing. Every use is domain-separated
+# so equal source values cannot be correlated across control purposes.
+LLM_QUOTA_HMAC_KEY = get_secret_setting(
+    "LLM_QUOTA_HMAC_KEY",
+    "LLM_QUOTA_HMAC_KEY_FILE",
+)
+# Groq currently documents strict JSON Schema decoding only for these GPT-OSS
+# models. Production is fail-closed so changing the model cannot silently
+# weaken the response contract to JSON Object Mode.
+GROQ_ALLOWED_MODELS = (
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+)
+GROQ_MODEL = (
+    str(aplication_config.get("GROQ_MODEL", "") or "").strip()
+    or "openai/gpt-oss-120b"
+)
+
+if GROQ_MODEL not in GROQ_ALLOWED_MODELS:
+    raise ImproperlyConfigured(
+        "GROQ_MODEL debe ser uno de estos valores: "
+        + ", ".join(GROQ_ALLOWED_MODELS)
+    )
+
+# Provider secrets remain optional for migrations and offline commands. The
+# application container enables this switch to fail before serving requests.
+LLM_PROVIDER_REQUIRED = get_boolean_setting(
+    "LLM_PROVIDER_REQUIRED",
+    default=False,
+)
+
+if LLM_PROVIDER_REQUIRED and not GROQ_API_KEY:
+    raise ImproperlyConfigured(
+        "Debe configurarse GROQ_API_KEY o GROQ_API_KEY_FILE."
+    )
+
+if LLM_PROVIDER_REQUIRED and not LLM_QUOTA_HMAC_KEY:
+    raise ImproperlyConfigured(
+        "Debe configurarse LLM_QUOTA_HMAC_KEY o LLM_QUOTA_HMAC_KEY_FILE."
+    )
+
+if LLM_QUOTA_HMAC_KEY and len(LLM_QUOTA_HMAC_KEY.encode("utf-8")) < 32:
+    raise ImproperlyConfigured(
+        "LLM_QUOTA_HMAC_KEY debe contener al menos 32 bytes UTF-8."
+    )
+
+# These limits are server-owned and cannot be overridden by API clients.
+LLM_MAX_INPUT_CHARACTERS = get_integer_setting(
+    "LLM_MAX_INPUT_CHARACTERS",
+    default=500,
+    minimum=1,
+    maximum=2000,
+)
+LLM_MAX_COMPLETION_TOKENS = get_integer_setting(
+    "LLM_MAX_COMPLETION_TOKENS",
+    default=1200,
+    minimum=128,
+    maximum=2000,
+)
+LLM_MAX_VISUAL_CONCEPTS = get_integer_setting(
+    "LLM_MAX_VISUAL_CONCEPTS",
+    default=5,
+    minimum=0,
+    maximum=10,
+)
+LLM_MAX_VISUAL_CONCEPT_CHARACTERS = get_integer_setting(
+    "LLM_MAX_VISUAL_CONCEPT_CHARACTERS",
+    default=40,
+    minimum=8,
+    maximum=64,
+)
+LLM_CONNECT_TIMEOUT_SECONDS = get_integer_setting(
+    "LLM_CONNECT_TIMEOUT_SECONDS",
+    default=3,
+    minimum=1,
+    maximum=10,
+)
+LLM_READ_TIMEOUT_SECONDS = get_integer_setting(
+    "LLM_READ_TIMEOUT_SECONDS",
+    default=20,
+    minimum=3,
+    maximum=60,
+)
+LLM_MAX_ATTEMPTS = get_integer_setting(
+    "LLM_MAX_ATTEMPTS",
+    default=2,
+    minimum=1,
+    maximum=3,
+)
+LLM_RETRY_BASE_MILLISECONDS = get_integer_setting(
+    "LLM_RETRY_BASE_MILLISECONDS",
+    default=250,
+    minimum=100,
+    maximum=2000,
+)
+LLM_MAX_RETRY_DELAY_SECONDS = get_integer_setting(
+    "LLM_MAX_RETRY_DELAY_SECONDS",
+    default=2,
+    minimum=1,
+    maximum=10,
+)
+LLM_TOTAL_TIMEOUT_SECONDS = get_integer_setting(
+    "LLM_TOTAL_TIMEOUT_SECONDS",
+    default=30,
+    minimum=5,
+    maximum=120,
+)
+LLM_MAX_CONCURRENT_PROVIDER_CALLS_PER_PROCESS = get_integer_setting(
+    "LLM_MAX_CONCURRENT_PROVIDER_CALLS_PER_PROCESS",
+    default=4,
+    minimum=1,
+    maximum=16,
+)
+# Select the backend that stores only short-lived, content-free HMAC markers.
+# Namespaced keys separate duplicate suppression, early attempt throttling, and
+# audit deduplication without introducing independent cache dependencies.
+LLM_DUPLICATE_CACHE_ALIAS = (
+    str(
+        aplication_config.get("LLM_DUPLICATE_CACHE_ALIAS", "default")
+        or "default"
+    )
+    .strip()
+    or "default"
+)
+# A production deployment must coordinate duplicate markers across all workers.
+LLM_REQUIRE_SHARED_DUPLICATE_CACHE = get_boolean_setting(
+    "LLM_REQUIRE_SHARED_DUPLICATE_CACHE",
+    default=not DEBUG,
+)
+# Post-success period during which an identical request remains suppressed. The
+# initial in-flight lease additionally includes LLM_TOTAL_TIMEOUT_SECONDS.
+LLM_DUPLICATE_TTL_SECONDS = get_integer_setting(
+    "LLM_DUPLICATE_TTL_SECONDS",
+    default=15,
+    minimum=1,
+    maximum=60,
+)
+# These cache-backed limits count every authenticated endpoint attempt before
+# JSON parsing. They supplement, but do not replace, transactional LLM quotas.
+LLM_INTERPRETATION_ATTEMPTS_PER_MINUTE = get_integer_setting(
+    "LLM_INTERPRETATION_ATTEMPTS_PER_MINUTE",
+    default=10,
+    minimum=1,
+    maximum=300,
+)
+LLM_INTERPRETATION_ATTEMPTS_PER_DAY = get_integer_setting(
+    "LLM_INTERPRETATION_ATTEMPTS_PER_DAY",
+    default=100,
+    minimum=1,
+    maximum=10_000,
+)
+# Pseudonymous quota rows outlive the longest one-day window only briefly.
+# A manual management command applies this policy until production scheduling
+# is introduced.
+LLM_RATE_LIMIT_STATE_RETENTION_DAYS = get_integer_setting(
+    "LLM_RATE_LIMIT_STATE_RETENTION_DAYS",
+    default=2,
+    minimum=2,
+    maximum=7,
+)
+
+if (
+    LLM_RETRY_BASE_MILLISECONDS
+    > LLM_MAX_RETRY_DELAY_SECONDS * 1000
+):
+    raise ImproperlyConfigured(
+        "LLM_RETRY_BASE_MILLISECONDS no debe superar "
+        "LLM_MAX_RETRY_DELAY_SECONDS."
+    )
+
+if LLM_TOTAL_TIMEOUT_SECONDS < LLM_CONNECT_TIMEOUT_SECONDS:
+    raise ImproperlyConfigured(
+        "LLM_TOTAL_TIMEOUT_SECONDS no debe ser inferior a "
+        "LLM_CONNECT_TIMEOUT_SECONDS."
+    )
+
+# Application-owned quotas must be reviewed against the exact organization
+# limits shown in Groq Console, which can differ from public plan summaries.
+LLM_USER_REQUESTS_PER_MINUTE = get_integer_setting(
+    "LLM_USER_REQUESTS_PER_MINUTE",
+    default=3,
+    minimum=1,
+    maximum=30,
+)
+LLM_USER_REQUESTS_PER_DAY = get_integer_setting(
+    "LLM_USER_REQUESTS_PER_DAY",
+    default=30,
+    minimum=1,
+    maximum=1000,
+)
+LLM_USER_TOKENS_PER_MINUTE = get_integer_setting(
+    "LLM_USER_TOKENS_PER_MINUTE",
+    default=7000,
+    minimum=1000,
+    maximum=8000,
+)
+LLM_USER_TOKENS_PER_DAY = get_integer_setting(
+    "LLM_USER_TOKENS_PER_DAY",
+    default=50000,
+    minimum=1000,
+    maximum=125000,
+)
+LLM_GLOBAL_REQUESTS_PER_MINUTE = get_integer_setting(
+    "LLM_GLOBAL_REQUESTS_PER_MINUTE",
+    default=10,
+    minimum=1,
+    maximum=30,
+)
+LLM_GLOBAL_REQUESTS_PER_DAY = get_integer_setting(
+    "LLM_GLOBAL_REQUESTS_PER_DAY",
+    default=200,
+    minimum=1,
+    maximum=1000,
+)
+LLM_GLOBAL_TOKENS_PER_MINUTE = get_integer_setting(
+    "LLM_GLOBAL_TOKENS_PER_MINUTE",
+    default=7000,
+    minimum=1000,
+    maximum=8000,
+)
+LLM_GLOBAL_TOKENS_PER_DAY = get_integer_setting(
+    "LLM_GLOBAL_TOKENS_PER_DAY",
+    default=90000,
+    minimum=1000,
+    maximum=200000,
+)
+
+if (
+    LLM_USER_REQUESTS_PER_MINUTE > LLM_GLOBAL_REQUESTS_PER_MINUTE
+    or LLM_USER_REQUESTS_PER_DAY > LLM_GLOBAL_REQUESTS_PER_DAY
+    or LLM_USER_TOKENS_PER_MINUTE > LLM_GLOBAL_TOKENS_PER_MINUTE
+    or LLM_USER_TOKENS_PER_DAY > LLM_GLOBAL_TOKENS_PER_DAY
+):
+    raise ImproperlyConfigured(
+        "Las cuotas de LLM por usuario no deben superar las cuotas globales "
+        "correspondientes."
+    )
+
+if (
+    LLM_INTERPRETATION_ATTEMPTS_PER_MINUTE
+    < LLM_USER_REQUESTS_PER_MINUTE
+    or LLM_INTERPRETATION_ATTEMPTS_PER_DAY < LLM_USER_REQUESTS_PER_DAY
+):
+    raise ImproperlyConfigured(
+        "Los límites de intentos de interpretación no deben ser inferiores "
+        "a las cuotas de solicitudes LLM por usuario correspondientes."
+    )
+
+if any(
+    LLM_MAX_COMPLETION_TOKENS > token_limit
+    for token_limit in (
+        LLM_USER_TOKENS_PER_MINUTE,
+        LLM_USER_TOKENS_PER_DAY,
+        LLM_GLOBAL_TOKENS_PER_MINUTE,
+        LLM_GLOBAL_TOKENS_PER_DAY,
+    )
+):
+    raise ImproperlyConfigured(
+        "LLM_MAX_COMPLETION_TOKENS no debe superar ninguna cuota de tokens. "
+        "La comprobación completa del prompt se realiza en cada solicitud."
+    )

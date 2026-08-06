@@ -179,8 +179,7 @@ class SecurityEventType(models.TextChoices):
     AUTHORIZATION_DENIED = "authorization_denied", "Autorización denegada"
     RATE_LIMITED = "rate_limited", "Solicitud limitada por tasa"
     PREFERENCES_UPDATED = "preferences_updated", "Preferencias actualizadas"
-    LLM_REQUEST_REJECTED = "llm_request_rejected", "Solicitud al LLM rechazada"
-    LLM_PROVIDER_ERROR = "llm_provider_error", "Error del proveedor LLM"
+    LLM_OUTPUT_REJECTED = "llm_output_rejected", "Salida del LLM rechazada"
     ARASAAC_PROVIDER_ERROR = "arasaac_provider_error", "Error de ARASAAC"
 
 class SecurityEvent(models.Model):
