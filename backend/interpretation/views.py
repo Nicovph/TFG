@@ -1,4 +1,4 @@
-"""Public health/mock and protected pragmatic interpretation API views."""
+"""Public health and protected pragmatic interpretation API views."""
 
 from __future__ import annotations
 
@@ -42,35 +42,18 @@ from .rate_limits import (
     LlmQuotaReservationTooLarge,
     LlmRateLimitExceeded,
 )
-from .serializers import (
-    InterpretationRequestSerializer,
-    MockInterpretationSerializer,
-)
+from .serializers import InterpretationRequestSerializer
 from .services import (
     DuplicateInterpretationRequest,
     InterpretationConfigurationError,
     InterpretationOutputRejected,
+    OffensiveLanguageOutputRejected,
     interpret_message,
 )
 from .throttles import (
     InterpretationBurstThrottle,
     InterpretationSustainedThrottle,
 )
-
-
-MOCK_INTERPRETATION = {
-    "kind": "mock_interpretation",
-    "summary": (
-        "La frase se interpreta como un mensaje neutral. Puede necesitar "
-        "contexto adicional si hay ironía o intención indirecta."
-    ),
-    "tone": "neutral",
-    "signals": [
-        "No se detecta una alerta clara en esta respuesta simulada.",
-        "La interpretación real se conectará en una iteración posterior.",
-    ],
-    "visual_concepts": ["comunicar", "comprender", "contexto"],
-}
 
 
 def _apply_no_store_headers(response: HttpResponseBase) -> HttpResponseBase:
@@ -175,22 +158,6 @@ def health(request: Request) -> Response:
             "service": "django",
         }
     )
-
-
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def mock_interpretation(request: Request) -> Response:
-    """Return the fixed sample without receiving or persisting user text.
-
-    Args:
-        request: HTTP request received by Django REST Framework.
-
-    Returns:
-        A deterministic simulated interpretation payload.
-    """
-    serializer = MockInterpretationSerializer(data=MOCK_INTERPRETATION)
-    serializer.is_valid(raise_exception=True)
-    return _no_store_response(serializer.data)
 
 
 class NoStoreAPIView(APIView):
@@ -404,6 +371,16 @@ class InterpretationView(NoStoreAPIView):
                 event_type=SecurityEventType.LLM_OUTPUT_REJECTED,
                 actor=user,
             )
+            if isinstance(exc, OffensiveLanguageOutputRejected):
+                return _error_response(
+                    error="offensive_language_hidden",
+                    message=(
+                        "La respuesta generada incluía lenguaje ofensivo y tu "
+                        "preferencia está configurada para ocultarlo. No se ha "
+                        "mostrado ese contenido. Puedes intentarlo de nuevo."
+                    ),
+                    response_status=status.HTTP_502_BAD_GATEWAY,
+                )
             return _error_response(
                 error="invalid_interpretation_response",
                 message=(

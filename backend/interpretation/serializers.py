@@ -1,4 +1,4 @@
-"""Strict request and auxiliary response serializers for interpretation APIs."""
+"""Strict request serializers for interpretation APIs."""
 
 from __future__ import annotations
 
@@ -69,24 +69,6 @@ class StrictBooleanField(serializers.BooleanField):
             self.fail("invalid")
 
         return super().to_internal_value(data)
-
-
-class MockInterpretationSerializer(serializers.Serializer):
-    """Represent the deterministic mock interpretation from iteration two."""
-
-    kind = serializers.ChoiceField(choices=["mock_interpretation"])
-    summary = serializers.CharField(max_length=500)
-    tone = serializers.ChoiceField(choices=["neutral"])
-    signals = serializers.ListField(
-        child=serializers.CharField(max_length=200),
-        allow_empty=False,
-        max_length=10,
-    )
-    visual_concepts = serializers.ListField(
-        child=serializers.CharField(max_length=64),
-        allow_empty=False,
-        max_length=10,
-    )
 
 
 class InterpretationRequestSerializer(serializers.Serializer):
