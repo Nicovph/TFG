@@ -91,7 +91,6 @@ services:
       LLM_PROVIDER_REQUIRED: "true"
       # Empty optional values delegate defaults and validation to Django,
       # avoiding a second, drift-prone configuration source in Compose.
-      LLM_MAX_INPUT_CHARACTERS: ${LLM_MAX_INPUT_CHARACTERS:-}
       LLM_MAX_COMPLETION_TOKENS: ${LLM_MAX_COMPLETION_TOKENS:-}
       LLM_MAX_VISUAL_CONCEPTS: ${LLM_MAX_VISUAL_CONCEPTS:-}
       LLM_MAX_VISUAL_CONCEPT_CHARACTERS: ${LLM_MAX_VISUAL_CONCEPT_CHARACTERS:-}

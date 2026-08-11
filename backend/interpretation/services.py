@@ -19,6 +19,7 @@ from backend.preferences.services import get_user_preferences
 
 from .contracts import (
     LLMInterpretationOutput,
+    OffensiveLanguageOutputError,
     OutputBusinessRuleError,
     SignalKind,
     validate_output_business_rules,
@@ -50,6 +51,10 @@ class DuplicateInterpretationRequest(RuntimeError):
 
 class InterpretationOutputRejected(RuntimeError):
     """Indicate schema-valid output rejected by application business rules."""
+
+
+class OffensiveLanguageOutputRejected(InterpretationOutputRejected):
+    """Indicate output withheld to honor the hidden-language preference."""
 
 
 class InterpretationConfigurationError(RuntimeError):
@@ -438,7 +443,12 @@ def interpret_message(
                 "error_type=business_rule request_id=%s",
                 get_current_request_id() or "none",
             )
-            raise InterpretationOutputRejected(
+            rejection = (
+                OffensiveLanguageOutputRejected
+                if isinstance(exc, OffensiveLanguageOutputError)
+                else InterpretationOutputRejected
+            )
+            raise rejection(
                 "La interpretación generada no superó las reglas de seguridad."
             ) from exc
     except ImproperlyConfigured as exc:

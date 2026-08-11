@@ -801,12 +801,9 @@ if LLM_QUOTA_HMAC_KEY and len(LLM_QUOTA_HMAC_KEY.encode("utf-8")) < 32:
     )
 
 # These limits are server-owned and cannot be overridden by API clients.
-LLM_MAX_INPUT_CHARACTERS = get_integer_setting(
-    "LLM_MAX_INPUT_CHARACTERS",
-    default=500,
-    minimum=1,
-    maximum=2000,
-)
+# Keep the combined target-and-context limit as a fixed product contract shared
+# with React; deployment overrides would make the browser and Django disagree.
+LLM_MAX_INPUT_CHARACTERS = 500
 LLM_MAX_COMPLETION_TOKENS = get_integer_setting(
     "LLM_MAX_COMPLETION_TOKENS",
     default=1200,

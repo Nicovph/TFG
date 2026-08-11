@@ -56,6 +56,43 @@ DISALLOWED_OUTPUT_PATTERN = re.compile(
 )
 COMPARISON_TOKEN_PATTERN = re.compile(r"[^\W_]+")
 
+# Explicit entries are hidden whenever the preference is disabled. Contextual
+# entries are hidden only when the model also reports possible offensive use,
+# avoiding false positives for ordinary meanings such as an animal or object.
+_EXPLICIT_OFFENSIVE_EXPRESSIONS = (
+    "gilipollas", "hija de puta", "hijas de puta", "hijo de puta",
+    "hijos de puta", "idiota", "idiotas", "imbecil", "imbeciles", "imbécil",
+    "imbéciles", "jodete", "jódete", "malnacida", "malnacidas", "malnacido",
+    "malnacidos", "maricon", "maricona", "mariconas", "maricones", "maricón",
+    "mierda", "no vales nada", "puta", "putas", "puto", "putos",
+    "que te jodan", "subnormal", "subnormales", "vete a la mierda",
+)
+_CONTEXTUAL_INSULT_EXPRESSIONS = (
+    "animal", "animales", "asquerosa", "asquerosas", "asqueroso",
+    "asquerosos", "bastarda", "bastardas", "bastardo", "bastardos", "basura",
+    "bestia", "bestias", "burra", "burras", "burro", "burros", "cabra",
+    "cabras", "cabron", "cabrona", "cabronas", "cabrones", "cabrón",
+    "capulla", "capullas", "capullo", "capullos", "cerda", "cerdas", "cerdo",
+    "cerdos", "cobarde", "cobardes", "das asco", "desgraciada",
+    "desgraciadas", "desgraciado", "desgraciados", "estupida", "estupidas",
+    "estupido", "estupidos",
+    "estúpida", "estúpidas", "estúpido", "estúpidos", "fracasada",
+    "fracasadas", "fracasado", "fracasados", "ignorante", "ignorantes",
+    "inutil", "inutiles", "inútil", "inútiles", "loca", "locas", "loco",
+    "locos", "mentirosa", "mentirosas", "mentiroso", "mentirosos",
+    "miserable", "miserables", "necia", "necias", "necio", "necios",
+    "patetica", "pateticas", "patetico", "pateticos", "patética",
+    "patéticas", "patético", "patéticos", "payasa", "payasas", "payaso",
+    "payasos", "pesada", "pesadas", "pesado", "pesados", "rata", "ratas",
+    "repugnante", "repugnantes", "retrasada", "retrasadas", "retrasado",
+    "retrasados", "ridicula", "ridiculas", "ridiculo", "ridiculos", "ridícula",
+    "ridículas", "ridículo", "ridículos",
+    "sinverguenza", "sinverguenzas", "sinvergüenza", "sinvergüenzas",
+    "tonta", "tontas", "tonto", "tontos", "torpe", "torpes", "vaga",
+    "vagas", "vago", "vagos", "zorra", "zorras",
+)
+
+
 class PragmaticSignal(BaseModel):
     """Represent one closed pragmatic signal without diagnostic claims."""
 
@@ -105,7 +142,10 @@ class LLMInterpretationOutput(BaseModel):
         StringConstraints(min_length=1, max_length=700),
         Field(
             description=(
-                "Versión directa y literal del mensaje sin análisis adicional."
+                "Posible forma explícita, directa y natural de expresar la lectura "
+                "pragmática principal, sin presentarla como una intención cierta ni "
+                "añadir información no respaldada. Si el mensaje es literal, puede "
+                "mantenerse igual."
             )
         ),
     ]
@@ -144,6 +184,10 @@ class OutputBusinessRuleError(ValueError):
     """Indicate that schema-valid output violates application rules."""
 
 
+class OffensiveLanguageOutputError(OutputBusinessRuleError):
+    """Indicate that output exposes language the user chose to hide."""
+
+
 def _normalize_unicode(value: str) -> str:
     """Return the canonical Unicode representation used by the backend.
 
@@ -154,6 +198,65 @@ def _normalize_unicode(value: str) -> str:
         The NFKC-normalized Unicode string.
     """
     return unicodedata.normalize("NFKC", value)
+
+
+def _build_expression_pattern(expressions: tuple[str, ...]) -> re.Pattern[str]:
+    """Build a Unicode-aware pattern from trusted closed expressions.
+
+    Args:
+        expressions: Server-owned words and phrases to detect.
+
+    Returns:
+        A compiled pattern matching only complete words or phrases.
+    """
+    alternatives = sorted(
+        (
+            # Pattern that accepts one or more spaces between words.
+            r"\s+".join(
+                # Escape any character that has a special meaning in regular expressions (., *, +, ?, (, ), etc.).
+                re.escape(token)
+                for token in _normalize_unicode(expression).casefold().split()
+            )
+            for expression in expressions
+        ),
+        # Prefer longer matches first so shorter patterns do not shadow longer ones.
+        # key=len sorts by length; reverse=True puts the longest alternatives first.
+        key=len,
+        reverse=True,
+    )
+    return re.compile(r"(?<!\w)(?:" + "|".join(alternatives) + r")(?!\w)")
+
+
+_EXPLICIT_OFFENSIVE_PATTERN = _build_expression_pattern(
+    _EXPLICIT_OFFENSIVE_EXPRESSIONS
+)
+_CONTEXTUAL_INSULT_PATTERN = _build_expression_pattern(
+    _CONTEXTUAL_INSULT_EXPRESSIONS
+)
+
+
+def _contains_disallowed_offensive_language(
+    value: str,
+    *,
+    include_contextual: bool,
+) -> bool:
+    """Detect closed offensive expressions without retaining provider content.
+
+    Args:
+        value: Schema-valid provider text held only in process memory.
+        include_contextual: Whether context-dependent insults must also match.
+
+    Returns:
+        True when the configured output policy rejects the text.
+    """
+    normalized = _normalize_unicode(value).casefold()
+    return bool(
+        _EXPLICIT_OFFENSIVE_PATTERN.search(normalized)
+        or (
+            include_contextual
+            and _CONTEXTUAL_INSULT_PATTERN.search(normalized)
+        )
+    )
 
 
 def _tokenize_for_lexical_comparison(value: str) -> tuple[str, ...]:
@@ -253,6 +356,22 @@ def validate_output_business_rules(
     if len(signal_kinds) != len(set(signal_kinds)):
         raise OutputBusinessRuleError(
             "Los tipos de señales deben ser únicos."
+        )
+
+    if (
+        not preferences.show_offensive_language
+        and any(
+            _contains_disallowed_offensive_language(
+                value,
+                include_contextual=(
+                    "possible_offensive_language" in signal_kinds
+                ),
+            )
+            for value in (*text_fields, *output.visual_concepts)
+        )
+    ):
+        raise OffensiveLanguageOutputError(
+            "La salida contiene lenguaje ofensivo que debe permanecer oculto."
         )
 
     if not preferences.visual_support_enabled and output.visual_concepts:

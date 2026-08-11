@@ -13,7 +13,11 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from backend.accounts.models import CustomUser
 from backend.preferences.models import UserPreferences
 
-from ..contracts import LLMInterpretationOutput, OutputBusinessRuleError
+from ..contracts import (
+    LLMInterpretationOutput,
+    OffensiveLanguageOutputError,
+    OutputBusinessRuleError,
+)
 from ..input_validation import (
     ContextSpeakerRelation,
     InterpretationMessageValidationError,
@@ -23,6 +27,7 @@ from ..services import (
     DuplicateInterpretationRequest,
     InterpretationConfigurationError,
     InterpretationOutputRejected,
+    OffensiveLanguageOutputRejected,
     interpret_message,
 )
 from .helpers import valid_output_payload
@@ -531,6 +536,30 @@ class InterpretationServiceTests(TestCase):
         self.assertIn("error_type=business_rule", rendered_logs)
         self.assertNotIn("private-rejected-output", rendered_logs)
         self.assertNotIn("Mensaje cuya salida", rendered_logs)
+
+    @patch("backend.interpretation.services.validate_output_business_rules")
+    @patch("backend.interpretation.services.reserve_llm_user_request_quota")
+    @patch("backend.interpretation.services.request_interpretation")
+    def test_offensive_output_rejection_preserves_only_its_closed_reason(
+        self,
+        provider_mock: Mock,
+        quota_mock: Mock,
+        validate_mock: Mock,
+    ) -> None:
+        """Preserve the safe rejection category without exposing output text."""
+        provider_mock.return_value = LLMInterpretationOutput.model_validate(
+            valid_output_payload()
+        )
+        validate_mock.side_effect = OffensiveLanguageOutputError("private-output")
+
+        with self.assertRaises(OffensiveLanguageOutputRejected) as raised:
+            interpret_message(
+                user=self.user,
+                target_message="Mensaje sintético distinto.",
+            )
+
+        quota_mock.assert_called_once_with(user_id=self.user.id)
+        self.assertNotIn("private-output", str(raised.exception))
 
 
 @override_settings(

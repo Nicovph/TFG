@@ -9,6 +9,7 @@ from backend.preferences.models import InterpretationDetail, UserPreferences
 
 from ..contracts import (
     LLMInterpretationOutput,
+    OffensiveLanguageOutputError,
     OutputBusinessRuleError,
     validate_output_business_rules,
 )
@@ -53,6 +54,14 @@ class StructuredOutputContractTests(SimpleTestCase):
         self.assertIn(
             "significado pragmático",
             schema["properties"]["interpretation"]["description"],
+        )
+        self.assertIn(
+            "Posible forma explícita",
+            schema["properties"]["clear_reformulation"]["description"],
+        )
+        self.assertIn(
+            "intención cierta",
+            schema["properties"]["clear_reformulation"]["description"],
         )
         self.assertIn(
             "contexto que falta",
@@ -250,6 +259,148 @@ class StructuredOutputContractTests(SimpleTestCase):
             output=allowed_output,
             analyzed_message="Mensaje diferente",
             preferences=preferences,
+            max_visual_concepts=5,
+            max_visual_concept_characters=40,
+        )
+
+    def test_hidden_offensive_language_is_rejected_in_every_output_area(
+        self,
+    ) -> None:
+        """Prevent explicit insults from reaching React or ARASAAC."""
+        preferences = UserPreferences(
+            interpretation_detail=InterpretationDetail.STANDARD,
+            visual_support_enabled=True,
+            show_offensive_language=False,
+        )
+        payload_changes = (
+            {"interpretation": "El mensaje utiliza la palabra imbécil."},
+            {"clear_reformulation": "Eres un imbécil."},
+            {
+                "needs_more_context": True,
+                "context_note": "Aclara por qué utilizó el término imbécil.",
+            },
+            {
+                "signals": [
+                    {
+                        "kind": "possible_offensive_language",
+                        "explanation": "La expresión imbécil es despectiva.",
+                    }
+                ]
+            },
+            {"visual_concepts": ["imbécil"]},
+        )
+
+        for changes in payload_changes:
+            payload = valid_output_payload()
+            payload.update(changes)
+            output = LLMInterpretationOutput.model_validate(payload)
+
+            with self.subTest(changes=changes), self.assertRaises(
+                OffensiveLanguageOutputError
+            ) as raised:
+                validate_output_business_rules(
+                    output=output,
+                    analyzed_message="Mensaje sintético",
+                    preferences=preferences,
+                    max_visual_concepts=5,
+                    max_visual_concept_characters=40,
+                )
+
+            self.assertEqual(
+                str(raised.exception),
+                "La salida contiene lenguaje ofensivo que debe permanecer oculto.",
+            )
+
+    def test_contextual_insults_require_the_offensive_signal(self) -> None:
+        """Avoid treating a context-dependent word as offensive unconditionally."""
+        preferences = UserPreferences(
+            interpretation_detail=InterpretationDetail.STANDARD,
+            visual_support_enabled=True,
+            show_offensive_language=False,
+        )
+        payload = valid_output_payload()
+        payload["clear_reformulation"] = "La herramienta es inútil."
+        literal_output = LLMInterpretationOutput.model_validate(payload)
+
+        validate_output_business_rules(
+            output=literal_output,
+            analyzed_message="La herramienta no sirve.",
+            preferences=preferences,
+            max_visual_concepts=5,
+            max_visual_concept_characters=40,
+        )
+
+        payload["clear_reformulation"] = "Eres un inútil."
+        payload["signals"] = [
+            {
+                "kind": "possible_offensive_language",
+                "explanation": "La palabra se dirige contra una persona.",
+            }
+        ]
+        offensive_output = LLMInterpretationOutput.model_validate(payload)
+
+        with self.assertRaises(OutputBusinessRuleError):
+            validate_output_business_rules(
+                output=offensive_output,
+                analyzed_message="Mensaje sintético",
+                preferences=preferences,
+                max_visual_concepts=5,
+                max_visual_concept_characters=40,
+            )
+
+    def test_offensive_detection_normalizes_unicode_and_honors_preferences(
+        self,
+    ) -> None:
+        """Handle Unicode variants without matching inside longer words."""
+        hidden_preferences = UserPreferences(
+            interpretation_detail=InterpretationDetail.STANDARD,
+            visual_support_enabled=True,
+            show_offensive_language=False,
+        )
+
+        for offensive_value in (
+            "IMBÉCIL",
+            "imbe\u0301cil",
+            "HIJO   DE\nPUTA",
+        ):
+            payload = valid_output_payload()
+            payload["clear_reformulation"] = offensive_value
+            output = LLMInterpretationOutput.model_validate(payload)
+
+            with self.subTest(offensive_value=offensive_value), self.assertRaises(
+                OutputBusinessRuleError
+            ):
+                validate_output_business_rules(
+                    output=output,
+                    analyzed_message="Mensaje sintético",
+                    preferences=hidden_preferences,
+                    max_visual_concepts=5,
+                    max_visual_concept_characters=40,
+                )
+
+        allowed_payload = valid_output_payload()
+        allowed_payload["clear_reformulation"] = "Es un valor putativo."
+        allowed_output = LLMInterpretationOutput.model_validate(allowed_payload)
+        validate_output_business_rules(
+            output=allowed_output,
+            analyzed_message="Mensaje sintético",
+            preferences=hidden_preferences,
+            max_visual_concepts=5,
+            max_visual_concept_characters=40,
+        )
+
+        shown_preferences = UserPreferences(
+            interpretation_detail=InterpretationDetail.STANDARD,
+            visual_support_enabled=True,
+            show_offensive_language=True,
+        )
+        visible_payload = valid_output_payload()
+        visible_payload["clear_reformulation"] = "Eres un imbécil."
+        visible_output = LLMInterpretationOutput.model_validate(visible_payload)
+        validate_output_business_rules(
+            output=visible_output,
+            analyzed_message="Mensaje sintético",
+            preferences=shown_preferences,
             max_visual_concepts=5,
             max_visual_concept_characters=40,
         )

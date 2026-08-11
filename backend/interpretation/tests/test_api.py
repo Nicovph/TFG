@@ -32,6 +32,7 @@ from ..services import (
     DuplicateInterpretationRequest,
     InterpretationConfigurationError,
     InterpretationOutputRejected,
+    OffensiveLanguageOutputRejected,
     InterpretationResult,
 )
 from ..throttles import InterpretationBurstThrottle
@@ -353,6 +354,34 @@ class InterpretationApiTests(TestCase):
             "invalid_interpretation_response",
         )
         self.assertNotIn("detalle privado", str(response.data))
+        self.assertEqual(
+            SecurityEvent.objects.filter(
+                event_type=SecurityEventType.LLM_OUTPUT_REJECTED,
+                actor=self.user,
+            ).count(),
+            1,
+        )
+
+    @patch("backend.interpretation.views.interpret_message")
+    def test_hidden_offensive_output_explains_why_it_is_not_shown(
+        self,
+        service_mock: Mock,
+    ) -> None:
+        """Explain the honored preference without exposing rejected content."""
+        service_mock.side_effect = OffensiveLanguageOutputRejected("private-output")
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, data=self.valid_request, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertEqual(response.data["error"], "offensive_language_hidden")
+        self.assertEqual(
+            response.data["message"],
+            "La respuesta generada incluía lenguaje ofensivo y tu preferencia "
+            "está configurada para ocultarlo. No se ha mostrado ese contenido. "
+            "Puedes intentarlo de nuevo.",
+        )
+        self.assertNotIn("private-output", str(response.data))
         self.assertEqual(
             SecurityEvent.objects.filter(
                 event_type=SecurityEventType.LLM_OUTPUT_REJECTED,
