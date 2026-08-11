@@ -6,6 +6,7 @@
 import { ACCOUNT_LABEL } from '../data/infoPages'
 import type { LogoutStatus } from '../hooks/useAuthSession'
 import { LoadingSpinner } from './LoadingSpinner'
+import { Tooltip } from './Tooltip'
 import styles from './AccountMenu.module.css'
 
 const ACCOUNT_PANEL_ID = 'account-panel'
@@ -31,15 +32,17 @@ export function AccountMenu({ logoutStatus, open, onAccountToggle, onLogout }: A
 
   return (
     <div className={styles.accountArea}>
-      <button
-        className={styles.userPill}
-        type="button"
-        aria-expanded={open}
-        aria-controls={open ? ACCOUNT_PANEL_ID : undefined}
-        onClick={onAccountToggle}
-      >
-        {ACCOUNT_LABEL}
-      </button>
+      <Tooltip align="end" label="Opciones de cuenta">
+        <button
+          className={styles.userPill}
+          type="button"
+          aria-expanded={open}
+          aria-controls={open ? ACCOUNT_PANEL_ID : undefined}
+          onClick={onAccountToggle}
+        >
+          {ACCOUNT_LABEL}
+        </button>
+      </Tooltip>
       {open ? (
         <div id={ACCOUNT_PANEL_ID} className={styles.accountPanel}>
           <button type="button" onClick={onLogout} disabled={logoutInProgress}>

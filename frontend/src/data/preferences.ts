@@ -53,7 +53,7 @@ type PreferenceGroups = readonly [
 export const PREFERENCE_GROUPS = [
   {
     id: 'interpretationDetail',
-    label: 'Detalle de la interpretación',
+    label: 'Detalle de la explicación',
     options: [
       { value: 'brief', label: 'Corta y directa' },
       { value: 'standard', label: 'Estándar' },

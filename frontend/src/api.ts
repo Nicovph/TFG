@@ -7,12 +7,44 @@ import type {
   PreferenceKey,
   PreferenceState,
 } from './data/preferences'
-import type { ApiHealth, MockInterpretation, SessionStatus } from './types'
+import type {
+  ApiHealth,
+  Interpretation,
+  InterpretationRequest,
+  InterpretationSignalKind,
+  SessionStatus,
+} from './types'
 
 // Keep this value synchronized with Django's effective CSRF_COOKIE_NAME setting,
 // whose default is "csrftoken". Reading it from the static Vite frontend also
 // requires CSRF_COOKIE_HTTPONLY and CSRF_USE_SESSIONS to remain false.
 const CSRF_COOKIE_NAME = 'csrftoken'
+
+// `as const` preserves each entry as a readonly string literal, allowing this
+// tuple to be both the runtime allowlist and the compile-time type source.
+const API_ERROR_CODES = [
+  'authentication_unavailable',
+  'invalid_interpretation_request',
+  'invalid_json',
+  'unsupported_media_type',
+  'authentication_required',
+  'permission_denied',
+  'method_not_allowed',
+  'not_acceptable',
+  'interpretation_attempt_rate_limited',
+  'duplicate_interpretation_request',
+  'interpretation_rate_limited',
+  'invalid_provider_response',
+  'invalid_interpretation_response',
+  'offensive_language_hidden',
+  'interpretation_temporarily_unavailable',
+  'interpretation_not_configured',
+  'interpretation_provider_error',
+] as const
+
+// `typeof` obtains the tuple type and `[number]` derives the union of all its
+// element types. This compile-time operation emits no JavaScript.
+type ApiErrorCode = (typeof API_ERROR_CODES)[number]
 
 interface ApiRequestOptions {
   /**
@@ -29,20 +61,37 @@ interface ApiRequestOptions {
 
 /**
  * Represent a non-successful HTTP response without retaining response details.
+ * The internal Error.message remains the stable technical code "api_request_failed".
+ *
  */
 export class ApiError extends Error {
+  // `code` groups every API failure; `apiCode` preserves its validated cause.
   readonly code = 'api_request_failed' as const
+  readonly apiCode: ApiErrorCode | null
+  readonly publicMessage: string | null
+  readonly retryAfterSeconds: number | null
   readonly status: number
 
   /**
-   * Create an API error containing only a safe code and HTTP status.
+   * Create an API error containing only validated safe response details.
    *
    * Args:
    *   status: The HTTP response status returned by the internal API.
+   *   apiCode: Validated machine-readable code returned by Django.
+   *   publicMessage: Length-bounded message returned by the same-origin API.
+   *   retryAfterSeconds: Optional positive delay returned by Django.
    */
-  constructor(status: number) {
+  constructor(
+    status: number,
+    apiCode: ApiErrorCode | null,
+    publicMessage: string | null,
+    retryAfterSeconds: number | null,
+  ) {
     super('api_request_failed')
     this.name = 'ApiError'
+    this.apiCode = apiCode
+    this.publicMessage = publicMessage
+    this.retryAfterSeconds = retryAfterSeconds
     this.status = status
   }
 }
@@ -75,6 +124,53 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+/**
+ * Parse the only safe details retained from a failed internal API response.
+ *
+ * Args:
+ *   response: Non-successful same-origin response returned by Django.
+ *
+ * Returns:
+ *   A closed API code, length-bounded public message, and optional retry delay.
+ */
+async function parseApiError(response: Response): Promise<ApiError> {
+  let apiCode: ApiErrorCode | null = null
+  let publicMessage: string | null = null
+
+  try {
+    const payload: unknown = await response.json()
+
+    if (isRecord(payload)) {
+      // find() retains a known literal code; any unknown server value becomes null.
+      apiCode = API_ERROR_CODES.find((code) => code === payload.error) ?? null
+
+      if (
+        typeof payload.message === 'string' &&
+        payload.message.length <= 300
+      ) {
+        publicMessage = payload.message
+      }
+    }
+  } catch {
+    // An invalid error body is discarded instead of exposing or retaining it.
+  }
+
+  const retryAfterHeader = response.headers.get('Retry-After')
+  const parsedRetryAfter = retryAfterHeader ? Number(retryAfterHeader) : Number.NaN
+  const retryAfterSeconds =
+  // Accept only positive safe integers (exactly representable in IEEE-754 double precision).
+    Number.isSafeInteger(parsedRetryAfter) && parsedRetryAfter > 0
+      ? parsedRetryAfter
+      : null
+
+  return new ApiError(
+    response.status,
+    apiCode,
+    publicMessage,
+    retryAfterSeconds,
+  )
 }
 
 /**
@@ -180,7 +276,7 @@ async function fetchJson(path: string, options: ApiRequestOptions = {}): Promise
   })
 
   if (!response.ok) {
-    throw new ApiError(response.status)
+    throw await parseApiError(response)
   }
 
   try {
@@ -317,10 +413,10 @@ function serializePreferenceChange<K extends PreferenceKey>(
 function parseApiHealth(payload: unknown): ApiHealth {
   if (
     !isRecord(payload) ||
+    // Keep the health contract closed so deployment metadata is not mistaken for API state.
+    Object.keys(payload).length !== 2 ||
     payload.status !== 'ok' ||
-    payload.service !== 'django' ||
-    typeof payload.api_version !== 'string' ||
-    !isStringArray(payload.features)
+    payload.service !== 'django'
   ) {
     throw new Error('invalid_api_health_payload')
   }
@@ -328,41 +424,66 @@ function parseApiHealth(payload: unknown): ApiHealth {
   return {
     status: payload.status,
     service: payload.service,
-    apiVersion: payload.api_version,
-    features: payload.features,
   }
 }
 
+const INTERPRETATION_SIGNAL_KINDS = [
+  'possible_irony',
+  'possible_ambiguity',
+  'possible_indirect_language',
+  'possible_offensive_language',
+  'possible_aggression',
+  'possible_cyberbullying',
+  // Literal tuple + compile-time check that every value belongs to InterpretationSignalKind.
+] as const satisfies readonly InterpretationSignalKind[]
+
 /**
- * Parse and validate the mock interpretation payload.
+ * Parse and validate the closed pragmatic interpretation returned by Django.
  *
  * Args:
- *   payload: The JSON value returned by Django.
+ *   payload: The JSON value returned by the protected interpretation endpoint.
  *
  * Returns:
- *   A typed mock interpretation object.
+ *   A camel-cased interpretation safe for React to render as text.
  *
  * Raises:
- *   Error: If the payload shape is not the expected contract.
+ *   Error: If the payload contains missing, extra, or invalid fields.
  */
-function parseMockInterpretation(payload: unknown): MockInterpretation {
+function parseInterpretation(payload: unknown): Interpretation {
   if (
     !isRecord(payload) ||
-    payload.kind !== 'mock_interpretation' ||
-    typeof payload.summary !== 'string' ||
-    typeof payload.tone !== 'string' ||
-    !isStringArray(payload.signals) ||
-    !isStringArray(payload.visual_concepts)
+    Object.keys(payload).length !== 8 ||
+    payload.kind !== 'pragmatic_interpretation' ||
+    typeof payload.interpretation !== 'string' ||
+    typeof payload.clear_reformulation !== 'string' ||
+    typeof payload.needs_more_context !== 'boolean' ||
+    typeof payload.context_note !== 'string' ||
+    !Array.isArray(payload.signals) ||
+    !payload.signals.every(
+      (signal) =>
+        isRecord(signal) &&
+        Object.keys(signal).length === 2 &&
+        typeof signal.kind === 'string' &&
+        INTERPRETATION_SIGNAL_KINDS.includes(
+          signal.kind as InterpretationSignalKind,
+        ) &&
+        typeof signal.explanation === 'string',
+    ) ||
+    !isStringArray(payload.visual_concepts) ||
+    typeof payload.show_content_warning !== 'boolean'
   ) {
-    throw new Error('invalid_mock_interpretation_payload')
+    throw new Error('invalid_interpretation_payload')
   }
 
   return {
     kind: payload.kind,
-    summary: payload.summary,
-    tone: payload.tone,
-    signals: payload.signals,
+    interpretation: payload.interpretation,
+    clearReformulation: payload.clear_reformulation,
+    needsMoreContext: payload.needs_more_context,
+    contextNote: payload.context_note,
+    signals: payload.signals as Interpretation['signals'],
     visualConcepts: payload.visual_concepts,
+    showContentWarning: payload.show_content_warning,
   }
 }
 
@@ -402,17 +523,34 @@ export async function getApiHealth(signal?: AbortSignal): Promise<ApiHealth> {
 }
 
 /**
- * Load a fixed simulated interpretation from Django.
+ * Request one transient pragmatic interpretation from Django.
  *
  * Args:
+ *   request: Bounded text, optional context, speaker relations, and notice state.
  *   signal: Optional abort signal used to cancel an obsolete request.
  *
  * Returns:
- *   A typed mock interpretation object.
+ *   The strictly validated interpretation returned by Django.
  */
-export async function getMockInterpretation(signal?: AbortSignal): Promise<MockInterpretation> {
-  return parseMockInterpretation(
-    await fetchJson('/api/interpretations/mock/', { signal }),
+export async function getInterpretation(
+  request: InterpretationRequest,
+  signal?: AbortSignal,
+): Promise<Interpretation> {
+  return parseInterpretation(
+    await fetchJson('/api/interpretations/', {
+      body: {
+        target_message: request.targetMessage,
+        previous_context: request.previousContext,
+        previous_context_speaker: request.previousContextSpeaker,
+        following_context: request.followingContext,
+        following_context_speaker: request.followingContextSpeaker,
+        external_processing_acknowledged:
+          request.externalProcessingAcknowledged,
+      },
+      csrf: true,
+      method: 'POST',
+      signal,
+    }),
   )
 }
 

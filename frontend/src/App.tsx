@@ -4,7 +4,6 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import type { SubmitEvent } from 'react'
 import logoMark from './assets/Cerebro_logo_app.png'
 import { AppHeader } from './components/AppHeader'
 import { Drawer } from './components/Drawer'
@@ -18,10 +17,7 @@ import type { AppView } from './data/infoPages'
 import { useAuthFlowError } from './hooks/useAuthFlowError'
 import { useAuthSession } from './hooks/useAuthSession'
 import { useApiHealth } from './hooks/useApiHealth'
-import {
-  MAX_MESSAGE_LENGTH,
-  useInterpretationWorkspace,
-} from './hooks/useInterpretationWorkspace'
+import { useInterpretationWorkspace } from './hooks/useInterpretationWorkspace'
 import { useUserPreferences } from './hooks/useUserPreferences'
 import {
   readSessionStorage,
@@ -106,15 +102,21 @@ function App() {
   const {
     canSubmit,
     closeVisualSupport,
+    contextExpanded,
+    errorMessage,
+    errorTitle,
     interpretation,
     interpretationStatus,
-    message,
     openVisualSupport,
     remainingCharacters,
+    request,
     requestInterpretation,
     resetInterpretationWorkspace,
     selectedVisualLabel,
-    updateMessage,
+    toggleContext,
+    updateAcknowledgment,
+    updateSpeaker,
+    updateText,
   } = useInterpretationWorkspace()
   const {
     preferences,
@@ -346,21 +348,6 @@ function App() {
     closeTransientPanels()
   }
 
-  /**
-   * Submit the local form and request a fixed mock result without sending text.
-   *
-   * Args:
-   *   event: The form submission event.
-   *
-   * Returns:
-   *   Nothing.
-   */
-  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault()
-
-    void requestInterpretation()
-  }
-
   if (authFlowError) {
     return (
       <StatusView
@@ -455,18 +442,25 @@ function App() {
               onPreferencesRetry={retryPreferences}
               onSettingsToggle={handleSettingsToggle}
             />
+            {/* Avoid race conditions with the preference update PATCH. */}
             <InterpretationWorkspace
-              canSubmit={canSubmit}
+              canSubmit={canSubmit && preferenceStatus === 'ready'}
+              contextExpanded={contextExpanded}
+              errorMessage={errorMessage}
+              errorTitle={errorTitle}
               interpretation={interpretation}
               interpretationStatus={interpretationStatus}
               logoSrc={logoMark}
-              maxMessageLength={MAX_MESSAGE_LENGTH}
-              message={message}
+              preferenceStatus={preferenceStatus}
               remainingCharacters={remainingCharacters}
+              request={request}
               showVisualSupport={showVisualSupport}
+              onAcknowledgmentChange={updateAcknowledgment}
+              onContextToggle={toggleContext}
+              onSpeakerChange={updateSpeaker}
+              onSubmit={requestInterpretation}
+              onTextChange={updateText}
               onVisualSupportOpen={openVisualSupport}
-              onMessageChange={updateMessage}
-              onSubmit={handleSubmit}
             />
           </main>
         ) : null}

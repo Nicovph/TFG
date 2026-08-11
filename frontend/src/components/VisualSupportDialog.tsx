@@ -1,7 +1,7 @@
 /**
  * VisualSupportDialog.tsx renders a modal dialog preview with focus trapping,
- * Escape handling, and a visible close button. It will be used to display the
- * pictograms of ARASAAC.
+ * Escape handling, and a visible close button. It currently identifies a
+ * visual concept and will display its ARASAAC pictogram in the next iteration.
  */
 
 import { useEffect, useRef } from 'react' // React hooks for managing side effects and references to DOM elements.

@@ -106,6 +106,9 @@
   margin: 0 0 var(--space-md);
   color: var(--color-text-copy);
   font-size: 1rem;
+  hyphens: auto;
+  text-align: justify;
+  text-justify: inter-word;
 }
 
 /* Preserve visible keyboard focus across every header action. */
@@ -128,5 +131,11 @@
   .infoBrandButton img {
     width: 58px;
     height: 58px;
+  }
+
+  /* Avoid uneven word spacing on narrow screens while preserving desktop justification. */
+  .infoArticle p {
+    hyphens: none;
+    text-align: start;
   }
 }

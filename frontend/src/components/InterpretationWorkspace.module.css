@@ -1,13 +1,11 @@
-/* InterpretationWorkspace.module.css styles the message input and result area. */
+/* InterpretationWorkspace.module.css styles the interpretation form and result. */
 
-/* Constrain the workspace to a readable desktop width with stable page gutters. */
 .workspace {
-  width: min(980px, calc(100% - var(--page-content-gutter)));
+  width: min(1040px, calc(100% - var(--page-content-gutter)));
   margin: 0 auto;
   padding: 6px 0 72px;
 }
 
-/* The centered mark separates the application header from the working area. */
 .workspaceMark {
   display: block;
   width: var(--brand-logo-size);
@@ -16,13 +14,29 @@
   object-fit: contain;
 }
 
-/* Form sections use grid spacing as result content changes. */
-.messageForm {
+.messageForm,
+.inputColumn,
+.inputPanel,
+.contextFields,
+.contextField,
+.resultContent,
+.resultContent section {
   display: grid;
+}
+
+.messageForm,
+.inputColumn,
+.contextFields,
+.resultContent {
   gap: var(--space-md);
 }
 
-/* Mode controls wrap instead of overflowing when additional modes are introduced. */
+.inputPanel,
+.contextField,
+.resultContent section {
+  gap: var(--space-xs);
+}
+
 .modeControls {
   display: flex;
   flex-wrap: wrap;
@@ -42,7 +56,6 @@
   background: var(--color-surface);
   color: var(--color-action-primary);
   font-weight: 800;
-  cursor: pointer;
 }
 
 .modeButton.active {
@@ -58,81 +71,173 @@
   font-size: 0.62em;
 }
 
-/* Maintain equal columns without allowing content to force horizontal overflow. */
 .workGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-xs);
+  gap: var(--space-md);
+  align-items: start;
 }
 
-/* Establish a positioning context for the character counter. */
-.inputPanel {
-  position: relative;
+.inputPanel label,
+.contextField label {
+  color: var(--color-text-strong);
+  font-weight: 700;
 }
 
 .inputPanel textarea,
-.resultPanel {
+.contextField textarea,
+.contextField select {
   width: 100%;
-  min-height: 136px;
   box-sizing: border-box;
+  border: var(--border-width-control) solid var(--color-support);
   border-radius: var(--radius-medium);
+  background: var(--color-surface);
+  color: var(--color-text-input);
   font: inherit;
 }
 
-/* Allow vertical resizing while reserving space for the character counter. */
-.inputPanel textarea {
+.inputPanel textarea,
+.contextField textarea {
   resize: vertical;
-  padding: var(--space-md) 18px 36px;
-  border: var(--border-width-control) solid var(--color-support);
-  color: var(--color-text-input);
-  background: var(--color-surface);
+  padding: var(--space-md);
+}
+
+.inputPanel textarea {
+  height: 178px;
+  min-height: 150px;
+}
+
+.contextField textarea {
+  min-height: 96px;
+}
+
+.contextField select {
+  min-height: 44px;
+  padding: 0 38px 0 12px;
+}
+
+.contextField select:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .inputPanel textarea::placeholder,
+.contextField textarea::placeholder,
 .resultPanel > p {
   color: var(--color-text-placeholder);
 }
 
-.resultPanel > p {
-  margin: 0;
+.contextToggle,
+.submitButton {
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--radius-large);
+  font-weight: 800;
+  cursor: pointer;
 }
 
-/* Focus remains visible without changing the input dimensions. */
-.inputPanel textarea:focus {
-  outline: var(--border-width-strong) solid var(--color-focus-soft);
-  outline-offset: 2px;
+.contextToggle {
+  width: fit-content;
+  padding: 0 16px;
+  background: var(--color-action-soft);
+  color: var(--color-action-contrast);
 }
 
-.characterCount {
-  position: absolute;
-  right: 14px;
-  bottom: 10px;
-  color: var(--color-text-secondary);
-  font-size: 0.76rem;
-}
-
-/* The result surface mirrors the input to support side-by-side comparison. */
-.resultPanel {
-  padding: var(--space-md) 18px;
-  border: var(--border-width-control) solid var(--color-support-soft);
-  background: var(--color-support-soft);
-}
-
-.resultContent {
-  display: grid;
+.inputActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-sm);
 }
 
-.resultContent p,
-.resultContent ul {
+.contextFields {
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-md);
+  border: var(--border-width-thin) solid var(--color-border-muted);
+  border-radius: var(--radius-medium);
+}
+
+.contextFields legend {
+  padding: 0 var(--space-xs);
+  color: var(--color-text-strong);
+  font-weight: 800;
+}
+
+.contextFields > p,
+.characterCount,
+.submissionStatus,
+.processingDialog p,
+.resultPanel p,
+.resultPanel ul {
   margin: 0;
 }
 
-.resultContent ul {
-  padding-left: 20px;
+.contextFields > p,
+.characterCount {
+  color: var(--color-text-copy);
+  font-size: 0.9rem;
 }
 
-/* Visual concept actions wrap as result vocabulary grows. */
+.characterCount {
+  text-align: end;
+}
+
+.submissionStatus {
+  color: var(--color-text-copy);
+}
+
+.resultPanel {
+  width: 100%;
+  min-height: 178px;
+  padding: var(--space-md) 18px;
+  border: var(--border-width-control) solid var(--color-support-soft);
+  border-radius: var(--radius-medium);
+  background: var(--color-support-soft);
+}
+
+.resultContent h2,
+.resultContent h3 {
+  margin: 0;
+  color: var(--color-text-strong);
+}
+
+.resultContent h2 {
+  font-size: 1.35rem;
+}
+
+.resultContent h3 {
+  font-size: 1.05rem;
+}
+
+.resultContent ul {
+  padding-left: 22px;
+}
+
+.resultContent li + li {
+  margin-top: var(--space-xs);
+}
+
+.contentWarning {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border: var(--border-width-medium) solid var(--color-warning-border);
+  border-radius: var(--radius-medium);
+  background: var(--color-warning-surface);
+  color: var(--color-warning-text);
+  text-align: center;
+  font-weight: 800;
+}
+
+.contentWarning > span[aria-hidden='true'] {
+  flex: 0 0 auto;
+  font-size: 1.4rem;
+}
+
 .conceptList {
   display: flex;
   flex-wrap: wrap;
@@ -140,48 +245,95 @@
 }
 
 .conceptList button {
-  min-height: 30px;
-  padding: 0 10px;
-  border: 0;
+  min-height: 44px;
+  padding: 0 14px;
+  border: var(--border-width-thin) solid var(--color-support);
   border-radius: var(--radius-pill);
   background: var(--color-surface);
   color: var(--color-support-deep);
   font: inherit;
-  font-size: 0.84rem;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .submitButton {
   width: fit-content;
-  min-width: 82px;
-  min-height: 36px;
+  min-width: 110px;
   padding: 0 18px;
-  border: 0;
-  border-radius: var(--radius-large);
   background: var(--color-action-filled);
   color: var(--color-text-on-accent);
-  font-weight: 800;
-  cursor: pointer;
 }
 
-/* Disabled submission remains visibly and behaviorally distinct. */
 .submitButton:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
 
-/* Interactive workspace controls share one keyboard focus treatment. */
-.modeButton:focus-visible,
+/* The native modal provides focus containment and blocks background interaction. */
+.processingDialog {
+  width: min(520px, calc(100% - 40px));
+  padding: var(--space-lg);
+  border: var(--border-width-thin) solid var(--color-border-accent-soft);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface);
+  color: var(--color-text-copy);
+  box-shadow: var(--shadow-modal);
+}
+
+.processingDialog::backdrop {
+  background: var(--color-overlay);
+}
+
+.processingDialog h2 {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text-strong);
+}
+
+.processingActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.cancelProcessingButton,
+.confirmProcessingButton {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--radius-large);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cancelProcessingButton {
+  border: var(--border-width-thin) solid var(--color-action-primary);
+  background: var(--color-surface);
+  color: var(--color-action-contrast);
+}
+
+.confirmProcessingButton {
+  border: 0;
+  background: var(--color-action-filled);
+  color: var(--color-text-on-accent);
+}
+
+.inputPanel textarea:focus-visible,
+.contextField textarea:focus-visible,
+.contextField select:focus-visible,
+.contextToggle:focus-visible,
+.resultContent h2:focus-visible,
 .conceptList button:focus-visible,
-.submitButton:focus-visible {
+.submitButton:focus-visible,
+.cancelProcessingButton:focus-visible,
+.confirmProcessingButton:focus-visible {
   outline: var(--focus-outline);
   outline-offset: var(--focus-outline-offset);
 }
 
-/* Collapse the comparison grid into one reading order on smaller screens. */
 @media (max-width: 760px) {
   .workspace {
-    width: calc(100% - 52px);
+    width: calc(100% - 40px);
     padding-top: 0;
   }
 
@@ -193,11 +345,18 @@
 
   .workGrid {
     grid-template-columns: 1fr;
-    gap: 10px;
+  }
+
+  .inputPanel textarea {
+    height: 132px;
   }
 
   .inputPanel textarea,
   .resultPanel {
-    min-height: 116px;
+    min-height: 132px;
+  }
+
+  .contentWarning {
+    align-items: flex-start;
   }
 }

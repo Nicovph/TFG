@@ -42,6 +42,9 @@
   --color-overlay: rgba(39, 39, 48, 0.26);
   --color-overlay-soft: rgba(39, 39, 48, 0.18);
   --color-status-shadow: rgba(84, 212, 227, 0.18);
+  --color-warning-surface: #fff4c2;
+  --color-warning-border: #8a6d00;
+  --color-warning-text: #594700;
 
   /* A compact spacing scale represents shared layout rhythm instead of every literal size. */
   --space-2xs: 4px;
@@ -146,6 +149,9 @@
   --color-overlay: rgba(0, 0, 0, 0.58);
   --color-overlay-soft: rgba(0, 0, 0, 0.42);
   --color-status-shadow: rgba(114, 226, 237, 0.18);
+  --color-warning-surface: #493b0b;
+  --color-warning-border: #f0c94d;
+  --color-warning-text: #fff0a6;
 }
 
 /* System mode follows operating-system changes without storing a second local copy. */
@@ -179,6 +185,9 @@
     --color-overlay: rgba(0, 0, 0, 0.58);
     --color-overlay-soft: rgba(0, 0, 0, 0.42);
     --color-status-shadow: rgba(114, 226, 237, 0.18);
+    --color-warning-surface: #493b0b;
+    --color-warning-border: #f0c94d;
+    --color-warning-text: #fff0a6;
   }
 }
 
