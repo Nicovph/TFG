@@ -7,6 +7,7 @@ import hmac
 import ipaddress
 import uuid
 from collections.abc import Iterable
+from datetime import datetime
 from typing import NoReturn
 
 from django.conf import settings
@@ -166,6 +167,22 @@ class SecurityEventManager(models.Manager.from_queryset(SecurityEventQuerySet)):
         )
         event.save(force_insert=True)
         return event
+
+    def delete_through(self, *, cutoff: datetime) -> int:
+        """Delete audit events created no later than a trusted cutoff.
+
+        Args:
+            cutoff: Inclusive timestamp fixed by the maintenance command.
+
+        Returns:
+            The number of security event rows deleted or 0 if the model name 
+            (self.model._meta.label) does not appear.
+        """
+        queryset = self.get_queryset().filter(occurred_at__lte=cutoff)
+        # Call Django's base deletion deliberately so regular QuerySet.delete()
+        # remains blocked everywhere outside this narrow maintenance method.
+        _deleted_total, deleted_by_model = models.QuerySet.delete(queryset)
+        return deleted_by_model.get(self.model._meta.label, 0)
 
 # Predefined audit event categories used for filtering and reporting.
 class SecurityEventType(models.TextChoices):
