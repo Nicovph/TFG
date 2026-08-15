@@ -70,7 +70,7 @@ DEBUG = True
 ALLOWED_HOSTS = []
 
 
-# Emit only minimized LLM operational metadata to the container standard output.
+# Emit only minimized interpretation metadata to the container standard output.
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -92,6 +92,11 @@ LOGGING = {
     },
     "loggers": {
         "backend.interpretation.provider": {
+            "handlers": ["llm_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "backend.interpretation.arasaac": {
             "handlers": ["llm_console"],
             "level": "INFO",
             "propagate": False,
@@ -822,6 +827,32 @@ LLM_MAX_VISUAL_CONCEPT_CHARACTERS = get_integer_setting(
     minimum=8,
     maximum=64,
 )
+# ARASAAC has no backend credential. Its HTTPS origins remain fixed in code so
+# environment configuration cannot turn Django into a proxy to another host.
+ARASAAC_CONNECT_TIMEOUT_SECONDS = get_integer_setting(
+    "ARASAAC_CONNECT_TIMEOUT_SECONDS",
+    default=2,
+    minimum=1,
+    maximum=5,
+)
+ARASAAC_READ_TIMEOUT_SECONDS = get_integer_setting(
+    "ARASAAC_READ_TIMEOUT_SECONDS",
+    default=3,
+    minimum=1,
+    maximum=10,
+)
+ARASAAC_TOTAL_TIMEOUT_SECONDS = get_integer_setting(
+    "ARASAAC_TOTAL_TIMEOUT_SECONDS",
+    default=5,
+    minimum=1,
+    maximum=15,
+)
+
+if ARASAAC_TOTAL_TIMEOUT_SECONDS < ARASAAC_CONNECT_TIMEOUT_SECONDS:
+    raise ImproperlyConfigured(
+        "ARASAAC_TOTAL_TIMEOUT_SECONDS no debe ser inferior a "
+        "ARASAAC_CONNECT_TIMEOUT_SECONDS."
+    )
 LLM_CONNECT_TIMEOUT_SECONDS = get_integer_setting(
     "LLM_CONNECT_TIMEOUT_SECONDS",
     default=3,

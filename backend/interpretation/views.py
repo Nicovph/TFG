@@ -12,6 +12,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import (
     AuthenticationFailed,
+    ErrorDetail,
     MethodNotAllowed,
     NotAcceptable,
     NotAuthenticated,
@@ -54,6 +55,36 @@ from .throttles import (
     InterpretationBurstThrottle,
     InterpretationSustainedThrottle,
 )
+
+
+def _visual_support_requested(request: Request) -> bool:
+    """Validate the backwards-compatible visual-support response opt-in.
+
+    Args:
+        request: Authenticated interpretation request with untrusted query data.
+
+    Returns:
+        True only for the single closed `include=visual_support` parameter.
+
+    Raises:
+        ValidationError: If query parameters are unknown, duplicated, or invalid.
+    """
+    include_values = request.query_params.getlist("include")
+    if (
+        set(request.query_params) - {"include"}
+        or include_values not in ([], ["visual_support"])
+    ):
+        raise ValidationError(
+            {
+                "non_field_errors": [
+                    ErrorDetail(
+                        "Los parámetros de consulta no son válidos.",
+                        code="invalid_query_parameters",
+                    )
+                ]
+            }
+        )
+    return include_values == ["visual_support"]
 
 
 def _apply_no_store_headers(response: HttpResponseBase) -> HttpResponseBase:
@@ -225,6 +256,7 @@ class InterpretationView(NoStoreAPIView):
         # IsAuthenticated and AUTH_USER_MODEL guarantee this type before post().
         # cast() informs static analysis without adding a redundant runtime branch.
         user = cast(CustomUser, request.user)
+        include_visual_support = _visual_support_requested(request)
         serializer = InterpretationRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -239,11 +271,16 @@ class InterpretationView(NoStoreAPIView):
             following_context_speaker=serializer.validated_data[
                 "following_context_speaker"
             ],
+            include_visual_support=include_visual_support,
         )
 
         # Emit only JSON-native values from the already validated Pydantic model.
         response_payload = result.output.model_dump(mode="json")
         response_payload["show_content_warning"] = result.show_content_warning
+        if result.visual_support is not None:
+            response_payload["visual_support"] = (
+                result.visual_support.model_dump(mode="json")
+            )
         return Response(response_payload)
 
     def handle_exception(self, exc: Exception) -> Response:

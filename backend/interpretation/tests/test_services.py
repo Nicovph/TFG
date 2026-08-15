@@ -11,8 +11,13 @@ from django.db import connection
 from django.test import TestCase, TransactionTestCase, override_settings
 
 from backend.accounts.models import CustomUser
+from backend.audit.models import SecurityEventType
 from backend.preferences.models import UserPreferences
 
+from ..arasaac import (
+    MissingPictogram,
+    VisualSupportResult,
+)
 from ..contracts import (
     LLMInterpretationOutput,
     OffensiveLanguageOutputError,
@@ -47,12 +52,14 @@ class InterpretationServiceTests(TestCase):
         )
         self.preferences = UserPreferences.objects.create(user=self.user)
 
+    @patch("backend.interpretation.services.get_visual_support")
     @patch("backend.interpretation.services.reserve_llm_user_request_quota")
     @patch("backend.interpretation.services.request_interpretation")
     def test_service_minimizes_before_provider_call(
         self,
         provider_mock: object,
         quota_mock: object,
+        visual_support_mock: Mock,
     ) -> None:
         """Keep direct identifiers out of the provider message sequence."""
         provider_mock.return_value = LLMInterpretationOutput.model_validate(
@@ -92,7 +99,148 @@ class InterpretationServiceTests(TestCase):
             "same_as_target_author",
         )
         self.assertFalse(result.show_content_warning)
+        self.assertIsNone(result.visual_support)
+        visual_support_mock.assert_not_called()
         quota_mock.assert_called_once()
+
+    @patch("backend.interpretation.services.record_security_event_best_effort")
+    @patch("backend.interpretation.services.get_visual_support")
+    @patch("backend.interpretation.services.reserve_llm_user_request_quota")
+    @patch("backend.interpretation.services.request_interpretation")
+    def test_service_sends_only_validated_concepts_to_arasaac(
+        self,
+        provider_mock: Mock,
+        quota_mock: Mock,
+        visual_support_mock: Mock,
+        audit_mock: Mock,
+    ) -> None:
+        """Keep messages, context, and explanations outside ARASAAC calls."""
+        provider_mock.return_value = LLMInterpretationOutput.model_validate(
+            valid_output_payload()
+        )
+        visual_support_mock.return_value = VisualSupportResult(
+            status="unavailable",
+            items=[
+                MissingPictogram(
+                    concept="cerrar ventana",
+                    status="not_found",
+                )
+            ],
+            message=(
+                "No se encontraron pictogramas claros. "
+                "La interpretación de texto sigue disponible."
+            ),
+            attribution=None,
+        )
+
+        result = interpret_message(
+            user=self.user,
+            target_message="Mensaje sintético con una petición indirecta.",
+            previous_context="Contexto anterior que no debe salir.",
+            following_context="Contexto posterior que no debe salir.",
+            include_visual_support=True,
+        )
+
+        visual_support_mock.assert_called_once_with(
+            concepts=("cerrar ventana",),
+        )
+        serialized_call = str(visual_support_mock.call_args)
+        self.assertNotIn("Mensaje sintético", serialized_call)
+        self.assertNotIn("Contexto anterior", serialized_call)
+        self.assertNotIn(result.output.interpretation, serialized_call)
+        visual_result = result.visual_support
+        self.assertIsNotNone(visual_result)
+        assert visual_result is not None
+        self.assertEqual(visual_result.status, "unavailable")
+        quota_mock.assert_called_once_with(user_id=self.user.id)
+        audit_mock.assert_not_called()
+
+    @patch("backend.interpretation.services.record_security_event_best_effort")
+    @patch("backend.interpretation.services.reserve_llm_user_request_quota")
+    @patch("backend.interpretation.services.request_interpretation")
+    def test_opt_in_with_no_concepts_returns_no_op_visual_support(
+        self,
+        provider_mock: Mock,
+        quota_mock: Mock,
+        audit_mock: Mock,
+    ) -> None:
+        """Avoid every ARASAAC request when validated output has no concepts."""
+        self.preferences.visual_support_enabled = False
+        self.preferences.save(update_fields=["visual_support_enabled"])
+        output_payload = valid_output_payload()
+        output_payload["visual_concepts"] = []
+        provider_mock.return_value = LLMInterpretationOutput.model_validate(
+            output_payload
+        )
+
+        result = interpret_message(
+            user=self.user,
+            target_message="Mensaje sin apoyo visual solicitado en preferencias.",
+            include_visual_support=True,
+        )
+
+        visual_result = result.visual_support
+        self.assertIsNotNone(visual_result)
+        assert visual_result is not None
+        self.assertEqual(visual_result.status, "not_requested")
+        self.assertEqual(visual_result.items, [])
+        quota_mock.assert_called_once_with(user_id=self.user.id)
+        audit_mock.assert_not_called()
+
+    @patch("backend.interpretation.services.record_security_event_best_effort")
+    @patch("backend.interpretation.services.get_visual_support")
+    @patch("backend.interpretation.services.reserve_llm_user_request_quota")
+    @patch("backend.interpretation.services.request_interpretation")
+    def test_arasaac_failure_preserves_text_and_records_one_closed_event(
+        self,
+        provider_mock: Mock,
+        quota_mock: Mock,
+        visual_support_mock: Mock,
+        audit_mock: Mock,
+    ) -> None:
+        """Return valid interpretation text when visual lookup is unavailable."""
+        output_payload = valid_output_payload()
+        output_payload["visual_concepts"] = [
+            "cerrar ventana",
+            "abrir puerta",
+        ]
+        provider_mock.return_value = LLMInterpretationOutput.model_validate(
+            output_payload
+        )
+        visual_support_mock.side_effect = RuntimeError(
+            "private-arasaac-adapter-detail"
+        )
+
+        with self.assertLogs(
+            "backend.interpretation.services",
+            level="WARNING",
+        ) as captured:
+            result = interpret_message(
+                user=self.user,
+                target_message="Mensaje sintético para degradación visual.",
+                include_visual_support=True,
+            )
+
+        self.assertEqual(
+            result.output.interpretation,
+            output_payload["interpretation"],
+        )
+        visual_result = result.visual_support
+        self.assertIsNotNone(visual_result)
+        assert visual_result is not None
+        self.assertEqual(visual_result.status, "unavailable")
+        self.assertEqual(
+            [item.status for item in visual_result.items],
+            ["temporarily_unavailable", "temporarily_unavailable"],
+        )
+        audit_mock.assert_called_once_with(
+            event_type=SecurityEventType.ARASAAC_PROVIDER_ERROR,
+            actor=self.user,
+        )
+        quota_mock.assert_called_once_with(user_id=self.user.id)
+        rendered_logs = " ".join(captured.output)
+        self.assertIn("error_type=unexpected", rendered_logs)
+        self.assertNotIn("private-arasaac", rendered_logs)
 
     @patch("backend.interpretation.services.reserve_llm_provider_attempt_quota")
     @patch("backend.interpretation.services.reserve_llm_user_request_quota")
@@ -395,7 +543,9 @@ class InterpretationServiceTests(TestCase):
     @override_settings(
         LLM_TOTAL_TIMEOUT_SECONDS=30,
         LLM_DUPLICATE_TTL_SECONDS=15,
+        ARASAAC_TOTAL_TIMEOUT_SECONDS=5,
     )
+    @patch("backend.interpretation.services.get_visual_support")
     @patch("backend.interpretation.services.get_llm_transient_cache")
     @patch("backend.interpretation.services.reserve_llm_user_request_quota")
     @patch("backend.interpretation.services.request_interpretation")
@@ -404,6 +554,7 @@ class InterpretationServiceTests(TestCase):
         provider_mock: Mock,
         quota_mock: Mock,
         get_cache_mock: Mock,
+        visual_support_mock: Mock,
     ) -> None:
         """Use separate in-flight and post-success marker lifetimes safely."""
         duplicate_cache = Mock()
@@ -415,6 +566,20 @@ class InterpretationServiceTests(TestCase):
         provider_mock.return_value = LLMInterpretationOutput.model_validate(
             valid_output_payload()
         )
+        visual_support_mock.return_value = VisualSupportResult(
+            status="unavailable",
+            items=[
+                MissingPictogram(
+                    concept="cerrar ventana",
+                    status="not_found",
+                )
+            ],
+            message=(
+                "No se encontraron pictogramas claros. "
+                "La interpretación de texto sigue disponible."
+            ),
+            attribution=None,
+        )
 
         with self.assertLogs(
             "backend.interpretation.services",
@@ -423,19 +588,23 @@ class InterpretationServiceTests(TestCase):
             result = interpret_message(
                 user=self.user,
                 target_message="Mensaje con resultado válido.",
+                include_visual_support=True,
             )
 
         self.assertEqual(result.output.kind, "pragmatic_interpretation")
         duplicate_cache.add.assert_called_once_with(
             ANY,
             True,
-            timeout=45,
+            timeout=50,
         )
         duplicate_cache.touch.assert_called_once_with(
             ANY,
             timeout=15,
         )
         quota_mock.assert_called_once_with(user_id=self.user.id)
+        visual_support_mock.assert_called_once_with(
+            concepts=("cerrar ventana",),
+        )
         rendered_logs = " ".join(captured.output)
         self.assertIn("operation=touch", rendered_logs)
         self.assertNotIn("private-cache-endpoint", rendered_logs)

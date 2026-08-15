@@ -16,6 +16,12 @@ from backend.accounts.models import CustomUser
 from backend.audit.models import SecurityEvent, SecurityEventType
 from backend.preferences.models import UserPreferences
 
+from ..arasaac import (
+    ArasaacAttribution,
+    AvailablePictogram,
+    MissingPictogram,
+    VisualSupportResult,
+)
 from ..contracts import LLMInterpretationOutput
 from ..provider import (
     LlmProviderBusyError,
@@ -42,11 +48,13 @@ from .helpers import valid_output_payload
 def valid_service_result(
     *,
     show_content_warning: bool = False,
+    visual_support: VisualSupportResult | None = None,
 ) -> InterpretationResult:
     """Return one validated application result for mocked API tests.
 
     Args:
         show_content_warning: Deterministic presentation flag to expose.
+        visual_support: Optional validated ARASAAC response extension.
 
     Returns:
         A provider-independent application service result.
@@ -54,6 +62,7 @@ def valid_service_result(
     return InterpretationResult(
         output=LLMInterpretationOutput.model_validate(valid_output_payload()),
         show_content_warning=show_content_warning,
+        visual_support=visual_support,
     )
 
 
@@ -145,6 +154,143 @@ class InterpretationApiTests(TestCase):
         self.assert_private_no_store(response)
 
     @patch("backend.interpretation.views.interpret_message")
+    def test_visual_support_opt_in_returns_the_validated_extension(
+        self,
+        service_mock: Mock,
+    ) -> None:
+        """Expose pictograms only to clients that request the new contract."""
+        visual_support = VisualSupportResult(
+            status="complete",
+            items=[
+                AvailablePictogram(
+                    concept="cerrar ventana",
+                    pictogram_id=1234,
+                    label="cerrar la ventana",
+                    image_url=(
+                        "https://static.arasaac.org/pictograms/"
+                        "1234/1234_300.png"
+                    ),
+                )
+            ],
+            message="",
+            attribution=ArasaacAttribution(),
+        )
+        service_mock.return_value = valid_service_result(
+            visual_support=visual_support
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            f"{self.url}?include=visual_support",
+            data=self.valid_request,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            set(response.data),
+            {
+                "kind",
+                "interpretation",
+                "clear_reformulation",
+                "needs_more_context",
+                "context_note",
+                "signals",
+                "visual_concepts",
+                "show_content_warning",
+                "visual_support",
+            },
+        )
+        self.assertEqual(response.data["visual_support"]["status"], "complete")
+        self.assertEqual(
+            response.data["visual_support"]["items"][0]["pictogram_id"],
+            1234,
+        )
+        self.assertEqual(
+            response.data["interpretation"],
+            valid_output_payload()["interpretation"],
+        )
+        self.assertTrue(service_mock.call_args.kwargs["include_visual_support"])
+        self.assert_private_no_store(response)
+
+    @patch("backend.interpretation.views.interpret_message")
+    def test_visual_support_failure_keeps_text_and_http_200(
+        self,
+        service_mock: Mock,
+    ) -> None:
+        """Keep the interpretation usable when every pictogram is unavailable."""
+        service_mock.return_value = valid_service_result(
+            visual_support=VisualSupportResult(
+                status="unavailable",
+                items=[
+                    MissingPictogram(
+                        concept="cerrar ventana",
+                        status="temporarily_unavailable",
+                    )
+                ],
+                message=(
+                    "Los pictogramas no se pudieron cargar. "
+                    "La interpretación de texto sigue disponible."
+                ),
+                attribution=None,
+            )
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            f"{self.url}?include=visual_support",
+            data=self.valid_request,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["interpretation"],
+            valid_output_payload()["interpretation"],
+        )
+        self.assertEqual(response.data["visual_support"]["status"], "unavailable")
+        self.assertIn(
+            "texto sigue disponible",
+            response.data["visual_support"]["message"],
+        )
+        self.assert_private_no_store(response)
+
+    @patch("backend.interpretation.views.interpret_message")
+    def test_unknown_or_duplicate_query_parameters_are_rejected(
+        self,
+        service_mock: Mock,
+    ) -> None:
+        """Keep response negotiation closed without reflecting query values."""
+        self.client.force_login(self.user)
+
+        for query in (
+            "unknown=value",
+            "include=other",
+            "include=visual_support&include=visual_support",
+        ):
+            with self.subTest(query=query):
+                response = self.client.post(
+                    f"{self.url}?{query}",
+                    data=self.valid_request,
+                    format="json",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_400_BAD_REQUEST,
+                )
+                self.assertEqual(
+                    response.data["error"],
+                    "invalid_interpretation_request",
+                )
+                detail = response.data["fields"]["non_field_errors"][0]
+                self.assertEqual(detail["code"], "invalid_query_parameters")
+                self.assertNotIn(query, str(response.data))
+                self.assert_private_no_store(response)
+
+        service_mock.assert_not_called()
+
+    @patch("backend.interpretation.views.interpret_message")
     def test_unknown_provider_control_uses_a_generic_validation_envelope(
         self,
         service_mock: Mock,
@@ -226,6 +372,7 @@ class InterpretationApiTests(TestCase):
             previous_context_speaker="different_from_target_author",
             following_context="Después.",
             following_context_speaker="same_as_target_author",
+            include_visual_support=False,
         )
 
     @patch("backend.interpretation.views.interpret_message")

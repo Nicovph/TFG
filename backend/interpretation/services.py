@@ -14,9 +14,16 @@ from django.core.cache.backends.base import BaseCache
 from django.core.exceptions import ImproperlyConfigured
 
 from backend.accounts.models import CustomUser
+from backend.audit.models import SecurityEventType
 from backend.audit.request_context import get_current_request_id
+from backend.audit.services import record_security_event_best_effort
 from backend.preferences.services import get_user_preferences
 
+from .arasaac import (
+    VisualSupportResult,
+    build_unavailable_visual_support,
+    get_visual_support,
+)
 from .contracts import (
     LLMInterpretationOutput,
     OffensiveLanguageOutputError,
@@ -67,6 +74,7 @@ class InterpretationResult:
 
     output: LLMInterpretationOutput
     show_content_warning: bool
+    visual_support: VisualSupportResult | None = None
 
 
 _RISK_SIGNAL_KINDS: Final[frozenset[SignalKind]] = frozenset(
@@ -136,6 +144,7 @@ def _duplicate_cache_key(
     visual_support_enabled: bool,
     show_offensive_language: bool,
     show_content_warnings: bool,
+    include_visual_support: bool,
 ) -> str:
     """Create a short-lived HMAC fingerprint without storing content.
 
@@ -150,6 +159,7 @@ def _duplicate_cache_key(
         visual_support_enabled: Whether visual concepts may be returned.
         show_offensive_language: Closed provider presentation preference.
         show_content_warnings: Closed returned-result presentation preference.
+        include_visual_support: Whether the response uses the opt-in extension.
 
     Returns:
         A cache key containing only a keyed digest.
@@ -166,6 +176,7 @@ def _duplicate_cache_key(
         {
             "following_context": following_context,
             "following_context_speaker": following_context_speaker.value,
+            "include_visual_support": include_visual_support,
             "interpretation_detail": interpretation_detail,
             "previous_context": previous_context,
             "previous_context_speaker": previous_context_speaker.value,
@@ -182,22 +193,24 @@ def _duplicate_cache_key(
         sort_keys=True,
     )
     digest = build_llm_hmac_digest(
-        domain="llm-duplicate:v1",
+        domain="llm-duplicate:v2",
         value=material,
     )
-    return f"llm-duplicate-v1:{digest}"
+    return f"llm-duplicate-v2:{digest}"
 
 
 def _add_duplicate_marker_best_effort(
     *,
     duplicate_cache: BaseCache,
     duplicate_key: str,
+    include_visual_support: bool,
 ) -> bool | None:
     """Create one content-free marker without making cache outages fatal.
 
     Args:
         duplicate_cache: Validated cache backend selected by the server.
         duplicate_key: HMAC-only key derived from trusted request context.
+        include_visual_support: Whether the in-flight lease includes ARASAAC time.
 
     Returns:
         True when created, False when an equivalent marker already exists, or
@@ -211,6 +224,11 @@ def _add_duplicate_marker_best_effort(
             # The recent-success TTL also provides bounded local-service margin.
             timeout=(
                 settings.LLM_TOTAL_TIMEOUT_SECONDS
+                + (
+                    settings.ARASAAC_TOTAL_TIMEOUT_SECONDS
+                    if include_visual_support
+                    else 0
+                )
                 + settings.LLM_DUPLICATE_TTL_SECONDS
             ),
         )
@@ -286,6 +304,7 @@ def interpret_message(
     previous_context_speaker: str = ContextSpeakerRelation.UNKNOWN.value,
     following_context: str = "",
     following_context_speaker: str = ContextSpeakerRelation.UNKNOWN.value,
+    include_visual_support: bool = False,
 ) -> InterpretationResult:
     """Interpret one transient target using optional surrounding context.
 
@@ -296,6 +315,7 @@ def interpret_message(
         previous_context_speaker: Previous author's closed relation to the target.
         following_context: Optional subsequent text used only as evidence.
         following_context_speaker: Following author's closed relation to the target.
+        include_visual_support: Whether to resolve validated concepts in ARASAAC.
 
     Returns:
         Validated interpretation plus deterministic presentation metadata.
@@ -315,7 +335,11 @@ def interpret_message(
             invalid against the strict Pydantic contract.
         InterpretationConfigurationError: If an internal cache, HMAC, or quota
             configuration invariant is invalid.
+        TypeError: If the internal visual-support flag is not a Boolean.
     """
+    if type(include_visual_support) is not bool:
+        raise TypeError("La opción de apoyo visual debe ser booleana.")
+
     normalized_target = validate_and_normalize_interpretation_message(
         target_message,
         max_characters=settings.LLM_MAX_INPUT_CHARACTERS,
@@ -372,6 +396,7 @@ def interpret_message(
             visual_support_enabled=preferences.visual_support_enabled,
             show_offensive_language=preferences.show_offensive_language,
             show_content_warnings=preferences.show_content_warnings,
+            include_visual_support=include_visual_support,
         )
         duplicate_cache = get_llm_transient_cache()
     except ImproperlyConfigured as exc:
@@ -379,6 +404,7 @@ def interpret_message(
     marker_created = _add_duplicate_marker_best_effort(
         duplicate_cache=duplicate_cache,
         duplicate_key=duplicate_key,
+        include_visual_support=include_visual_support,
     )
 
     if marker_created is False:
@@ -430,12 +456,39 @@ def interpret_message(
                     settings.LLM_MAX_VISUAL_CONCEPT_CHARACTERS
                 ),
             )
+            visual_support = None
+            if include_visual_support:
+                visual_concepts = tuple(validated_output.visual_concepts)
+                try:
+                    visual_support = get_visual_support(
+                        concepts=visual_concepts,
+                    )
+                except Exception:
+                    # ARASAAC is optional: preserve valid interpretation text even
+                    # for an unforeseen adapter defect, without logging its data.
+                    logger.warning(
+                        "arasaac_lookup outcome=degraded "
+                        "error_type=unexpected request_id=%s",
+                        get_current_request_id() or "none",
+                    )
+                    visual_support = build_unavailable_visual_support(
+                        concepts=visual_concepts,
+                    )
+            if visual_support is not None and any(
+                item.status == "temporarily_unavailable"
+                for item in visual_support.items
+            ):
+                record_security_event_best_effort(
+                    event_type=SecurityEventType.ARASAAC_PROVIDER_ERROR,
+                    actor=user,
+                )
             result = InterpretationResult(
                 output=validated_output,
                 show_content_warning=_should_show_content_warning(
                     output=validated_output,
                     show_content_warnings=preferences.show_content_warnings,
                 ),
+                visual_support=visual_support,
             )
         except OutputBusinessRuleError as exc:
             logger.warning(
