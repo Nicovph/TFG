@@ -33,7 +33,7 @@ from ..rate_limits import (
 TEST_QUOTA_HMAC_KEY = "quota-tests-only-key-material-32-bytes"
 
 
-@override_settings(LLM_QUOTA_HMAC_KEY=TEST_QUOTA_HMAC_KEY)
+@override_settings(INTERPRETATION_HMAC_KEY=TEST_QUOTA_HMAC_KEY)
 class LlmRateLimitTests(TestCase):
     """Verify quotas use only pseudonymous counters and fixed windows."""
 
@@ -246,23 +246,25 @@ class LlmRateLimitTests(TestCase):
             _subject_hash("global"),
         )
 
-    def test_quota_hmac_key_rotation_changes_the_subject(self) -> None:
-        """Document that rotating the dedicated key restarts quota identity."""
+    def test_interpretation_hmac_key_rotation_changes_the_subject(self) -> None:
+        """Document that rotating the shared key restarts quota identity."""
         subject = f"user:{self.user.id}"
 
-        with override_settings(LLM_QUOTA_HMAC_KEY="a" * 32):
+        with override_settings(INTERPRETATION_HMAC_KEY="a" * 32):
             old_subject_hash = _subject_hash(subject)
 
-        with override_settings(LLM_QUOTA_HMAC_KEY="b" * 32):
+        with override_settings(INTERPRETATION_HMAC_KEY="b" * 32):
             new_subject_hash = _subject_hash(subject)
 
         self.assertNotEqual(old_subject_hash, new_subject_hash)
 
-    def test_quota_hmac_key_is_required_and_has_a_minimum_length(self) -> None:
-        """Reject absent or too-short quota pseudonymization keys."""
+    def test_interpretation_hmac_key_is_required_and_has_a_minimum_length(
+        self,
+    ) -> None:
+        """Reject absent or too-short interpretation HMAC keys."""
         for invalid_key in ("", "short-key"):
             with self.subTest(invalid_key=invalid_key):
-                with override_settings(LLM_QUOTA_HMAC_KEY=invalid_key):
+                with override_settings(INTERPRETATION_HMAC_KEY=invalid_key):
                     with self.assertRaises(ImproperlyConfigured):
                         _subject_hash("global")
 
@@ -288,7 +290,7 @@ class LlmRateLimitDatabaseConstraintTests(TransactionTestCase):
 
 
 @override_settings(
-    LLM_QUOTA_HMAC_KEY=TEST_QUOTA_HMAC_KEY,
+    INTERPRETATION_HMAC_KEY=TEST_QUOTA_HMAC_KEY,
     LLM_USER_REQUESTS_PER_MINUTE=1,
     LLM_USER_REQUESTS_PER_DAY=10,
     LLM_USER_TOKENS_PER_MINUTE=5000,

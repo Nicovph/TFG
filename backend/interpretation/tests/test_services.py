@@ -39,7 +39,7 @@ from .helpers import valid_output_payload
 
 
 @override_settings(
-    LLM_QUOTA_HMAC_KEY="service-unit-test-key-with-at-least-32-bytes",
+    INTERPRETATION_HMAC_KEY="service-unit-test-key-with-at-least-32-bytes",
 )
 class InterpretationServiceTests(TestCase):
     """Verify orchestration never persists or forwards common identifiers."""
@@ -732,7 +732,7 @@ class InterpretationServiceTests(TestCase):
 
 
 @override_settings(
-    LLM_QUOTA_HMAC_KEY="service-transaction-test-key-32-bytes",
+    INTERPRETATION_HMAC_KEY="service-transaction-test-key-32-bytes",
 )
 class InterpretationTransactionBoundaryTests(TransactionTestCase):
     """Verify external HTTP work never extends the quota transaction."""

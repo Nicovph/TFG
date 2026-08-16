@@ -18,7 +18,7 @@ from pydantic import ValidationError
 from backend.audit.request_context import get_current_request_id
 
 from ..contracts import CONCEPT_PATTERN
-from ..hmac_identifiers import build_llm_hmac_digest
+from ..hmac_identifiers import build_interpretation_hmac_digest
 from .client import (
     ARASAAC_API_ORIGIN,
     ARASAAC_LANGUAGE,
@@ -346,7 +346,7 @@ def _get_visual_support(
     if pictogram_cache is not None:
         for concept in canonical_concepts:
             try:
-                digest = build_llm_hmac_digest(
+                digest = build_interpretation_hmac_digest(
                     domain=f"arasaac-pictogram-cache:v1:{ARASAAC_LANGUAGE}",
                     value=unicodedata.normalize("NFKC", concept.casefold()),
                 )

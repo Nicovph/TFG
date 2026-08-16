@@ -9,7 +9,7 @@ from backend.audit.models import SecurityEventType
 from backend.audit.request_context import get_current_request_id
 from backend.audit.services import record_security_event_best_effort
 
-from .hmac_identifiers import build_llm_hmac_digest
+from .hmac_identifiers import build_interpretation_hmac_digest
 from .transient_cache import get_llm_transient_cache
 
 
@@ -32,7 +32,7 @@ def record_llm_rate_limit_best_effort(
         means the event was already represented or an auxiliary system failed.
     """
     try:
-        subject_digest = build_llm_hmac_digest(
+        subject_digest = build_interpretation_hmac_digest(
             domain="llm-rate-limit-audit:v1",
             value=actor.id.hex,
         )

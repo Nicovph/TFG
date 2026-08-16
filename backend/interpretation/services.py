@@ -31,7 +31,7 @@ from .contracts import (
     SignalKind,
     validate_output_business_rules,
 )
-from .hmac_identifiers import build_llm_hmac_digest
+from .hmac_identifiers import build_interpretation_hmac_digest
 from .input_validation import (
     ContextSpeakerRelation,
     validate_and_normalize_interpretation_message,
@@ -192,7 +192,7 @@ def _duplicate_cache_key(
         # from changing the serialized bytes and therefore the HMAC digest.
         sort_keys=True,
     )
-    digest = build_llm_hmac_digest(
+    digest = build_interpretation_hmac_digest(
         domain="llm-duplicate:v2",
         value=material,
     )

@@ -14,7 +14,7 @@ ARASAAC_TEST_SETTINGS = {
     "ARASAAC_TOTAL_TIMEOUT_SECONDS": 5,
     "LLM_MAX_VISUAL_CONCEPTS": 5,
     "LLM_MAX_VISUAL_CONCEPT_CHARACTERS": 40,
-    "LLM_QUOTA_HMAC_KEY": "test-only-arasaac-cache-key-000000",
+    "INTERPRETATION_HMAC_KEY": "test-only-arasaac-cache-key-000000",
 }
 
 

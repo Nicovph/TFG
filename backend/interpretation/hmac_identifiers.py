@@ -1,4 +1,4 @@
-"""Domain-separated HMAC identifiers for privacy-minimised LLM state."""
+"""Domain-separated HMAC identifiers for privacy-minimised interpretation state."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
 
-def build_llm_hmac_digest(*, domain: str, value: str) -> str:
-    """Create a backend-only HMAC digest for one transient LLM purpose.
+def build_interpretation_hmac_digest(*, domain: str, value: str) -> str:
+    """Create a backend-only HMAC digest for one interpretation purpose.
 
     Args:
         domain: Fixed application-owned namespace separating independent uses.
@@ -21,24 +21,24 @@ def build_llm_hmac_digest(*, domain: str, value: str) -> str:
 
     Raises:
         ValueError: If the trusted caller supplies an empty domain.
-        ImproperlyConfigured: If the LLM-specific HMAC key is absent or short.
+        ImproperlyConfigured: If the interpretation HMAC key is absent or short.
     """
     if not domain:
         raise ValueError("El dominio HMAC interno no puede estar vacío.")
 
-    configured_key = settings.LLM_QUOTA_HMAC_KEY
+    configured_key = settings.INTERPRETATION_HMAC_KEY
 
     if not configured_key:
         raise ImproperlyConfigured(
-            "Debe configurarse LLM_QUOTA_HMAC_KEY o "
-            "LLM_QUOTA_HMAC_KEY_FILE."
+            "Debe configurarse INTERPRETATION_HMAC_KEY o "
+            "INTERPRETATION_HMAC_KEY_FILE."
         )
 
     key = configured_key.encode("utf-8")
 
     if len(key) < 32:
         raise ImproperlyConfigured(
-            "LLM_QUOTA_HMAC_KEY debe contener al menos 32 bytes UTF-8."
+            "INTERPRETATION_HMAC_KEY debe contener al menos 32 bytes UTF-8."
         )
 
     return hmac.new(

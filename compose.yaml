@@ -85,9 +85,9 @@ services:
       GOOGLE_OIDC_CLIENT_SECRET_FILE: /run/secrets/google_oidc_client_secret
       GOOGLE_OIDC_REDIRECT_URI: ${GOOGLE_OIDC_REDIRECT_URI:?Set GOOGLE_OIDC_REDIRECT_URI in .env}
       GROQ_API_KEY_FILE: /run/secrets/groq_api_key
-      LLM_QUOTA_HMAC_KEY_FILE: /run/secrets/llm_quota_hmac_key
+      INTERPRETATION_HMAC_KEY_FILE: /run/secrets/interpretation_hmac_key
       GROQ_MODEL: ${GROQ_MODEL:-}
-      # Fail before serving HTTP if either backend-only LLM secret is absent.
+      # Fail before serving HTTP if either required backend-only secret is absent.
       LLM_PROVIDER_REQUIRED: "true"
       # Empty optional values delegate defaults and validation to Django,
       # avoiding a second, drift-prone configuration source in Compose.
@@ -136,8 +136,8 @@ services:
       - source: groq_api_key
         target: groq_api_key
 
-      - source: llm_quota_hmac_key
-        target: llm_quota_hmac_key
+      - source: interpretation_hmac_key
+        target: interpretation_hmac_key
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck: # Checks periodically if Django is working.
@@ -199,8 +199,8 @@ secrets:
   groq_api_key:
     file: ./.secrets/groq-api-key.txt
 
-  llm_quota_hmac_key:
-    file: ./.secrets/llm-quota-hmac-key.txt
+  interpretation_hmac_key:
+    file: ./.secrets/interpretation-hmac-key.txt
 
 volumes:
   postgres_data:

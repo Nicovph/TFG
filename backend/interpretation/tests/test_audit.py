@@ -13,7 +13,7 @@ from ..rate_limit_audit import record_llm_rate_limit_best_effort
 
 
 @override_settings(
-    LLM_QUOTA_HMAC_KEY="interpretation-audit-test-key-at-least-32-bytes",
+    INTERPRETATION_HMAC_KEY="interpretation-audit-test-key-at-least-32-bytes",
 )
 class InterpretationAuditPolicyTests(SimpleTestCase):
     """Verify audit deduplication failures cannot amplify database writes."""

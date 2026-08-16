@@ -772,12 +772,12 @@ GROQ_API_KEY = get_secret_setting(
     "GROQ_API_KEY",
     "GROQ_API_KEY_FILE",
 )
-# This backend-only secret protects quota subjects and transient LLM-control
-# identifiers independently from Django signing. Every use is domain-separated
-# so equal source values cannot be correlated across control purposes.
-LLM_QUOTA_HMAC_KEY = get_secret_setting(
-    "LLM_QUOTA_HMAC_KEY",
-    "LLM_QUOTA_HMAC_KEY_FILE",
+# This backend-only secret protects privacy-minimised interpretation identifiers
+# independently from Django signing. Domain separation prevents correlation
+# between quota, audit, duplicate-detection, throttle, and ARASAAC cache uses.
+INTERPRETATION_HMAC_KEY = get_secret_setting(
+    "INTERPRETATION_HMAC_KEY",
+    "INTERPRETATION_HMAC_KEY_FILE",
 )
 # Groq currently documents strict JSON Schema decoding only for these GPT-OSS
 # models. Production is fail-closed so changing the model cannot silently
@@ -809,14 +809,18 @@ if LLM_PROVIDER_REQUIRED and not GROQ_API_KEY:
         "Debe configurarse GROQ_API_KEY o GROQ_API_KEY_FILE."
     )
 
-if LLM_PROVIDER_REQUIRED and not LLM_QUOTA_HMAC_KEY:
+if LLM_PROVIDER_REQUIRED and not INTERPRETATION_HMAC_KEY:
     raise ImproperlyConfigured(
-        "Debe configurarse LLM_QUOTA_HMAC_KEY o LLM_QUOTA_HMAC_KEY_FILE."
+        "Debe configurarse INTERPRETATION_HMAC_KEY o "
+        "INTERPRETATION_HMAC_KEY_FILE."
     )
 
-if LLM_QUOTA_HMAC_KEY and len(LLM_QUOTA_HMAC_KEY.encode("utf-8")) < 32:
+if (
+    INTERPRETATION_HMAC_KEY
+    and len(INTERPRETATION_HMAC_KEY.encode("utf-8")) < 32
+):
     raise ImproperlyConfigured(
-        "LLM_QUOTA_HMAC_KEY debe contener al menos 32 bytes UTF-8."
+        "INTERPRETATION_HMAC_KEY debe contener al menos 32 bytes UTF-8."
     )
 
 # These limits are server-owned and cannot be overridden by API clients.

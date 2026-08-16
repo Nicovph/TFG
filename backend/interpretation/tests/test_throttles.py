@@ -45,7 +45,7 @@ def _request_with_uuid() -> tuple[Request, str]:
     CACHES=LOCAL_CACHES,
     LLM_DUPLICATE_CACHE_ALIAS="default",
     LLM_REQUIRE_SHARED_DUPLICATE_CACHE=False,
-    LLM_QUOTA_HMAC_KEY=TEST_HMAC_KEY,
+    INTERPRETATION_HMAC_KEY=TEST_HMAC_KEY,
 )
 class InterpretationThrottleTests(SimpleTestCase):
     """Verify cache selection, pseudonymous keys, and safe degradation."""

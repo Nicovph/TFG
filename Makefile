@@ -7,7 +7,7 @@ PYTHON ?= python3
 # Keep tests isolated from real provider credentials and network configuration.
 TEST_ENV = DJANGO_DB_PROFILE=test LLM_PROVIDER_REQUIRED=false \
 	GROQ_API_KEY= GROQ_API_KEY_FILE= \
-	LLM_QUOTA_HMAC_KEY= LLM_QUOTA_HMAC_KEY_FILE=
+	INTERPRETATION_HMAC_KEY= INTERPRETATION_HMAC_KEY_FILE=
 
 # Declare non-file targets so Make does not treat them as real files.
 .PHONY: run migrate makemigrations check test test1 test2 test3 test4

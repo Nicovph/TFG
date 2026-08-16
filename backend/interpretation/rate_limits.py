@@ -11,7 +11,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from .hmac_identifiers import build_llm_hmac_digest
+from .hmac_identifiers import build_interpretation_hmac_digest
 from .models import LLMRateLimitState
 
 
@@ -66,10 +66,10 @@ def _subject_hash(value: str) -> str:
         A lowercase HMAC-SHA-256 digest containing no raw identity.
 
     Raises:
-        ImproperlyConfigured: If the quota-specific HMAC key is missing or too
+        ImproperlyConfigured: If the interpretation HMAC key is missing or too
             short.
     """
-    return build_llm_hmac_digest(
+    return build_interpretation_hmac_digest(
         domain="llm-quota:v1",
         value=value,
     )

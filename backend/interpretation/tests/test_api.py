@@ -67,7 +67,7 @@ def valid_service_result(
 
 
 @override_settings(
-    LLM_QUOTA_HMAC_KEY="interpretation-api-test-key-with-32-bytes-minimum",
+    INTERPRETATION_HMAC_KEY="interpretation-api-test-key-with-32-bytes-minimum",
 )
 class InterpretationApiTests(TestCase):
     """Verify the endpoint exposes a narrow and non-cacheable contract."""

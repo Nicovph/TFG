@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from backend.audit.request_context import get_current_request_id
 
-from .hmac_identifiers import build_llm_hmac_digest
+from .hmac_identifiers import build_interpretation_hmac_digest
 from .transient_cache import get_llm_transient_cache
 
 
@@ -77,7 +77,7 @@ class _InterpretationAttemptThrottle(SimpleRateThrottle):
 
         # UUID.hex is canonical lowercase text without hyphens, so equivalent
         # UUID representations cannot create independent throttle subjects.
-        subject_digest = build_llm_hmac_digest(
+        subject_digest = build_interpretation_hmac_digest(
             domain="llm-interpretation-attempt:v1",
             value=user_id.hex,
         )
