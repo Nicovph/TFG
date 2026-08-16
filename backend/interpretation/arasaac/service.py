@@ -38,6 +38,7 @@ from .contracts import (
 logger = logging.getLogger(__name__)
 _CACHE_KEY_PREFIX = "arasaac-pictogram-v1"
 _CACHED_NOT_FOUND = "not_found"
+_CACHE_MISS = object()
 
 
 def _restore_cached_pictogram(
@@ -52,7 +53,7 @@ def _restore_cached_pictogram(
         value: Untrusted value returned by the configured cache backend.
 
     Returns:
-        A validated result, or None when the value is absent or invalid.
+        A validated result, or None when the stored value is invalid.
     """
     if type(value) is str and value == _CACHED_NOT_FOUND:
         return MissingPictogram(concept=concept, status="not_found")
@@ -342,21 +343,18 @@ def _get_visual_support(
                 get_current_request_id() or "none",
             )
 
-    # Reading cache values.
+    # Read cache values without hiding trusted key or validation errors.
     if pictogram_cache is not None:
         for concept in canonical_concepts:
+            digest = build_interpretation_hmac_digest(
+                domain=f"arasaac-pictogram-cache:v1:{ARASAAC_LANGUAGE}",
+                value=unicodedata.normalize("NFKC", concept.casefold()),
+            )
+            cache_key = f"{_CACHE_KEY_PREFIX}:{digest}"
             try:
-                digest = build_interpretation_hmac_digest(
-                    domain=f"arasaac-pictogram-cache:v1:{ARASAAC_LANGUAGE}",
-                    value=unicodedata.normalize("NFKC", concept.casefold()),
-                )
-                cache_key = f"{_CACHE_KEY_PREFIX}:{digest}"
-                cached_item = _restore_cached_pictogram(
-                    concept=concept,
-                    value=pictogram_cache.get(cache_key),
-                )
-            # In the event of any exception, caching is disabled for the remainder of the request, and the loop is exited.
+                cached_value = pictogram_cache.get(cache_key, _CACHE_MISS)
             except Exception:
+                # Disable only the optional cache after a backend read failure.
                 logger.warning(
                     "arasaac_cache outcome=degraded operation=read request_id=%s",
                     get_current_request_id() or "none",
@@ -364,6 +362,23 @@ def _get_visual_support(
                 pictogram_cache = None
                 break
             cache_keys[concept] = cache_key
+            if cached_value is _CACHE_MISS:
+                continue
+            cached_item = _restore_cached_pictogram(
+                concept=concept,
+                value=cached_value,
+            )
+            if cached_item is None:
+                # Remove invalid entries on a best-effort basis to avoid revalidation.
+                try:
+                    pictogram_cache.delete(cache_key)
+                except Exception:
+                    logger.warning(
+                        "arasaac_cache outcome=degraded operation=delete "
+                        "request_id=%s",
+                        get_current_request_id() or "none",
+                    )
+                continue
             # To disable each type of cache via configuration without deleting old data.
             if (
                 isinstance(cached_item, AvailablePictogram)

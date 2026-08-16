@@ -3,7 +3,7 @@
 import asyncio
 import inspect
 import time
-from unittest.mock import AsyncMock, Mock, call, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 from asgiref.sync import sync_to_async
@@ -68,7 +68,7 @@ class ArasaacServiceTests(SimpleTestCase):
     def test_available_result_is_cached_for_one_day_and_reused(self) -> None:
         """Reuse one validated result without exposing the concept in its key."""
         cache = Mock()
-        cache.get.return_value = None
+        cache.get.side_effect = lambda _key, default: default
         cache.set.return_value = True
         provider = AsyncMock(return_value=_available_pictogram("amistad"))
         with patch(
@@ -81,14 +81,17 @@ class ArasaacServiceTests(SimpleTestCase):
             ):
                 first = _get_visual_support(concepts=("amistad",))
                 key, cached_value = cache.set.call_args.args
-                cache.get.return_value = cached_value
+                cache.get.side_effect = lambda _key, _default: cached_value
                 second = _get_visual_support(concepts=("amistad",))
 
         provider.assert_awaited_once()
         self.assertEqual(first, second)
         self.assertTrue(key.startswith("arasaac-pictogram-v1:"))
         self.assertNotIn("amistad", key)
-        self.assertEqual(cache.get.call_args_list, [call(key), call(key)])
+        self.assertEqual(
+            [cache_call.args[0] for cache_call in cache.get.call_args_list],
+            [key, key],
+        )
         self.assertEqual(
             set(cached_value),
             {"pictogram_id", "label", "plural"},
@@ -103,7 +106,7 @@ class ArasaacServiceTests(SimpleTestCase):
     def test_not_found_is_cached_for_fifteen_minutes_and_reused(self) -> None:
         """Reuse a short-lived negative result without a second provider call."""
         cache = Mock()
-        cache.get.return_value = None
+        cache.get.side_effect = lambda _key, default: default
         cache.set.return_value = True
         provider = AsyncMock(return_value=None)
         with patch(
@@ -116,7 +119,7 @@ class ArasaacServiceTests(SimpleTestCase):
             ):
                 first = _get_visual_support(concepts=("ausente",))
                 key, cached_value = cache.set.call_args.args
-                cache.get.return_value = cached_value
+                cache.get.side_effect = lambda _key, _default: cached_value
                 second = _get_visual_support(concepts=("ausente",))
 
         provider.assert_awaited_once()
@@ -156,20 +159,50 @@ class ArasaacServiceTests(SimpleTestCase):
             cache.set.call_args.args[1],
             {"pictogram_id": 9829, "label": "seguridad", "plural": False},
         )
+        cache.delete.assert_called_once_with(cache.get.call_args.args[0])
+
+    @override_settings(**_CACHE_TEST_SETTINGS)
+    def test_cache_validation_errors_are_not_hidden_as_backend_failures(
+        self,
+    ) -> None:
+        """Propagate unexpected local validation errors after a successful read."""
+        cache = Mock()
+        cache.get.return_value = {"invalid": True}
+        provider = AsyncMock(return_value=_available_pictogram("configuracion"))
+        with patch(
+            "backend.interpretation.arasaac.service.search_concept",
+            provider,
+        ), patch(
+            "backend.interpretation.arasaac.service.caches",
+            {"arasaac": cache},
+        ), patch(
+            "backend.interpretation.arasaac.service._restore_cached_pictogram",
+            side_effect=RuntimeError("internal validation error"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "internal validation error"):
+                _get_visual_support(concepts=("configuracion",))
+
+        cache.get.assert_called_once()
+        provider.assert_not_awaited()
 
     @override_settings(**_CACHE_TEST_SETTINGS)
     def test_cache_failures_preserve_valid_provider_results(self) -> None:
-        """Treat optional cache read and write failures as sanitized misses."""
+        """Treat optional cache operation failures as sanitized misses."""
         private_detail = "redis://private-user:private-password@cache.internal"
 
-        for operation in ("read", "write"):
+        for operation in ("read", "delete", "write"):
             with self.subTest(operation=operation):
                 cache = Mock()
-                cache.get.return_value = None
-                cache.set.return_value = True
-                getattr(cache, "get" if operation == "read" else "set").side_effect = (
-                    RuntimeError(private_detail)
+                cache.get.side_effect = lambda _key, default: (
+                    {"invalid": True} if operation == "delete" else default
                 )
+                cache.set.return_value = True
+                getattr(
+                    cache,
+                    {"read": "get", "delete": "delete", "write": "set"}[
+                        operation
+                    ],
+                ).side_effect = RuntimeError(private_detail)
                 provider = AsyncMock(
                     return_value=_available_pictogram("concepto privado")
                 )
@@ -219,10 +252,15 @@ class ArasaacServiceTests(SimpleTestCase):
             )
 
         cache = Mock()
-        cache.get.side_effect = [
-            None,
-            {"pictogram_id": 9829, "label": "segundo concepto", "plural": False},
-        ]
+        cache.get.side_effect = lambda _key, default: (
+            default
+            if cache.get.call_count == 1
+            else {
+                "pictogram_id": 9829,
+                "label": "segundo concepto",
+                "plural": False,
+            }
+        )
         cache.set.return_value = True
         with patch(
             "backend.interpretation.arasaac.service.caches",
