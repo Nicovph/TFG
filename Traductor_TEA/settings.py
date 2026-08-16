@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
-from typing import Mapping
+from collections.abc import Mapping
 
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import dotenv_values
@@ -570,6 +570,20 @@ DATABASES = {
     }
 }
 
+# Keep reusable public pictogram metadata isolated from security-control caches.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "default",
+    },
+    # LOCATION keeps this store distinct from "default"; MAX_ENTRIES caps memory use.
+    "arasaac": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "arasaac-pictograms",
+        "OPTIONS": {"MAX_ENTRIES": 1_000},
+    },
+}
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -846,6 +860,20 @@ ARASAAC_TOTAL_TIMEOUT_SECONDS = get_integer_setting(
     default=5,
     minimum=1,
     maximum=15,
+)
+# Cache matches for one day and retry catalogue misses after fifteen minutes.
+ARASAAC_CACHE_ALIAS = "arasaac"
+ARASAAC_CACHE_TTL_SECONDS = get_integer_setting(
+    "ARASAAC_CACHE_TTL_SECONDS",
+    default=86_400,
+    minimum=0,
+    maximum=604_800,
+)
+ARASAAC_NOT_FOUND_CACHE_TTL_SECONDS = get_integer_setting(
+    "ARASAAC_NOT_FOUND_CACHE_TTL_SECONDS",
+    default=900,
+    minimum=0,
+    maximum=3_600,
 )
 
 if ARASAAC_TOTAL_TIMEOUT_SECONDS < ARASAAC_CONNECT_TIMEOUT_SECONDS:

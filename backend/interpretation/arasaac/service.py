@@ -12,12 +12,16 @@ from collections.abc import Sequence
 import httpx
 from asgiref.sync import async_to_sync
 from django.conf import settings
+from django.core.cache import caches
+from pydantic import ValidationError
 
 from backend.audit.request_context import get_current_request_id
 
 from ..contracts import CONCEPT_PATTERN
+from ..hmac_identifiers import build_llm_hmac_digest
 from .client import (
     ARASAAC_API_ORIGIN,
+    ARASAAC_LANGUAGE,
     _ArasaacHttpStatusError,
     _ArasaacResponseError,
     search_concept,
@@ -27,10 +31,52 @@ from .contracts import (
     AvailablePictogram,
     MissingPictogram,
     VisualSupportResult,
+    build_image_url,
 )
 
 
 logger = logging.getLogger(__name__)
+_CACHE_KEY_PREFIX = "arasaac-pictogram-v1"
+_CACHED_NOT_FOUND = "not_found"
+
+
+def _restore_cached_pictogram(
+    *,
+    concept: str,
+    value: object,
+) -> AvailablePictogram | MissingPictogram | None:
+    """Revalidate one minimal cache value before reuse.
+
+    Args:
+        concept: Current canonical concept omitted from the cache value.
+        value: Untrusted value returned by the configured cache backend.
+
+    Returns:
+        A validated result, or None when the value is absent or invalid.
+    """
+    if type(value) is str and value == _CACHED_NOT_FOUND:
+        return MissingPictogram(concept=concept, status="not_found")
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"pictogram_id", "label", "plural"}
+        or type(value["pictogram_id"]) is not int
+        or type(value["label"]) is not str
+        or type(value["plural"]) is not bool
+    ):
+        return None
+
+    try:
+        return AvailablePictogram(
+            concept=concept,
+            pictogram_id=value["pictogram_id"],
+            label=value["label"],
+            image_url=build_image_url(
+                pictogram_id=value["pictogram_id"],
+                plural=value["plural"],
+            ),
+        )
+    except (ValidationError, RecursionError):
+        return None
 
 
 def _canonicalize_concepts(concepts: Sequence[str]) -> tuple[str, ...]:
@@ -279,10 +325,115 @@ def _get_visual_support(
     if not canonical_concepts:
         # Avoid creating an event loop and HTTP client for an empty validated list.
         return _build_visual_support_result(items=[])
-    return async_to_sync(_lookup_visual_support)(
-        canonical_concepts=canonical_concepts,
-        transport=transport,
+
+    cache_keys: dict[str, str] = {}
+    cached_items: dict[str, AvailablePictogram | MissingPictogram] = {}
+    pictogram_cache = None
+    if (
+        settings.ARASAAC_CACHE_TTL_SECONDS
+        or settings.ARASAAC_NOT_FOUND_CACHE_TTL_SECONDS
+    ):
+        try:
+            pictogram_cache = caches[settings.ARASAAC_CACHE_ALIAS]
+        except Exception:
+            # The cache is optional; report only a closed failure category.
+            logger.warning(
+                "arasaac_cache outcome=degraded operation=resolve request_id=%s",
+                get_current_request_id() or "none",
+            )
+
+    # Reading cache values.
+    if pictogram_cache is not None:
+        for concept in canonical_concepts:
+            try:
+                digest = build_llm_hmac_digest(
+                    domain=f"arasaac-pictogram-cache:v1:{ARASAAC_LANGUAGE}",
+                    value=unicodedata.normalize("NFKC", concept.casefold()),
+                )
+                cache_key = f"{_CACHE_KEY_PREFIX}:{digest}"
+                cached_item = _restore_cached_pictogram(
+                    concept=concept,
+                    value=pictogram_cache.get(cache_key),
+                )
+            # In the event of any exception, caching is disabled for the remainder of the request, and the loop is exited.
+            except Exception:
+                logger.warning(
+                    "arasaac_cache outcome=degraded operation=read request_id=%s",
+                    get_current_request_id() or "none",
+                )
+                pictogram_cache = None
+                break
+            cache_keys[concept] = cache_key
+            # To disable each type of cache via configuration without deleting old data.
+            if (
+                isinstance(cached_item, AvailablePictogram)
+                and not settings.ARASAAC_CACHE_TTL_SECONDS
+            ) or (
+                isinstance(cached_item, MissingPictogram)
+                and not settings.ARASAAC_NOT_FOUND_CACHE_TTL_SECONDS
+            ):
+                cached_item = None
+            if cached_item is not None:
+                # Only those that remain valid are saved.
+                cached_items[concept] = cached_item
+
+    # Determine which concepts are not cached and need to be fetched from the provider.
+    uncached_concepts = tuple(
+        concept for concept in canonical_concepts if concept not in cached_items
     )
+    fetched_items: dict[str, AvailablePictogram | MissingPictogram] = {}
+    if uncached_concepts:
+        fetched_items = {
+            # For each returned item, use item.concept as the key and the item (using .items) itself as the value.
+            item.concept: item
+            for item in async_to_sync(_lookup_visual_support)(
+                canonical_concepts=uncached_concepts,
+                transport=transport,
+            ).items
+        }
+
+    resolved_items = cached_items | fetched_items
+    # Union of dictionaries: cached data + newly obtained data.
+    result = _build_visual_support_result(
+        items=[resolved_items[concept] for concept in canonical_concepts]
+    )
+
+    # Writnig cache values.
+    if pictogram_cache is not None:
+        for item in fetched_items.values():
+            if item.status == "temporarily_unavailable":
+                continue
+            if isinstance(item, AvailablePictogram):
+                cached_value: object = {
+                    "pictogram_id": item.pictogram_id,
+                    "label": item.label,
+                    # If the URL was the plural form.
+                    "plural": item.image_url
+                    == build_image_url(
+                        pictogram_id=item.pictogram_id,
+                        plural=True,
+                    ),
+                }
+                cache_ttl = settings.ARASAAC_CACHE_TTL_SECONDS
+            else:
+                cached_value = _CACHED_NOT_FOUND
+                cache_ttl = settings.ARASAAC_NOT_FOUND_CACHE_TTL_SECONDS
+            if not cache_ttl:
+                continue
+            try:
+                pictogram_cache.set(
+                    cache_keys[item.concept],
+                    cached_value,
+                    timeout=cache_ttl,
+                )
+            except Exception:
+                logger.warning(
+                    "arasaac_cache outcome=degraded operation=write request_id=%s",
+                    get_current_request_id() or "none",
+                )
+                break
+
+    return result
 
 
 def get_visual_support(

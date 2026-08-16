@@ -1,14 +1,40 @@
+"""Test ARASAAC orchestration, fallback, and cache behavior."""
+
 import asyncio
 import inspect
 import time
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import httpx
 from asgiref.sync import sync_to_async
 from django.test import SimpleTestCase, override_settings
 
-from ...arasaac import VisualSupportResult, get_visual_support
+from ...arasaac import AvailablePictogram, VisualSupportResult, get_visual_support
 from ...arasaac.service import _get_visual_support
 from .helpers import ARASAAC_TEST_SETTINGS, SlowJsonStream
+
+
+_CACHE_TEST_SETTINGS = {
+    "ARASAAC_CACHE_TTL_SECONDS": 86_400,
+    "ARASAAC_NOT_FOUND_CACHE_TTL_SECONDS": 900,
+}
+
+
+def _available_pictogram(concept: str) -> AvailablePictogram:
+    """Build one validated synthetic provider result.
+
+    Args:
+        concept: Safe concept and matching display label.
+
+    Returns:
+        A fixed-origin available pictogram for service tests.
+    """
+    return AvailablePictogram(
+        concept=concept,
+        pictogram_id=9829,
+        label=concept,
+        image_url="https://static.arasaac.org/pictograms/9829/9829_300.png",
+    )
 
 
 @override_settings(**ARASAAC_TEST_SETTINGS)
@@ -20,8 +46,160 @@ class ArasaacServiceTests(SimpleTestCase):
             ("concepts",),
         )
 
+    def test_zero_ttls_disable_cache_access(self) -> None:
+        """Bypass cache reads and writes when both bounded TTLs are disabled."""
+        cache = Mock()
+        provider = AsyncMock(return_value=_available_pictogram("sin cache"))
+        with patch(
+            "backend.interpretation.arasaac.service.search_concept",
+            provider,
+        ):
+            with patch(
+                "backend.interpretation.arasaac.service.caches",
+                {"arasaac": cache},
+            ):
+                result = _get_visual_support(concepts=("sin cache",))
+
+        self.assertEqual(result.status, "complete")
+        cache.get.assert_not_called()
+        cache.set.assert_not_called()
+
+    @override_settings(**_CACHE_TEST_SETTINGS)
+    def test_available_result_is_cached_for_one_day_and_reused(self) -> None:
+        """Reuse one validated result without exposing the concept in its key."""
+        cache = Mock()
+        cache.get.return_value = None
+        cache.set.return_value = True
+        provider = AsyncMock(return_value=_available_pictogram("amistad"))
+        with patch(
+            "backend.interpretation.arasaac.service.search_concept",
+            provider,
+        ):
+            with patch(
+                "backend.interpretation.arasaac.service.caches",
+                {"arasaac": cache},
+            ):
+                first = _get_visual_support(concepts=("amistad",))
+                key, cached_value = cache.set.call_args.args
+                cache.get.return_value = cached_value
+                second = _get_visual_support(concepts=("amistad",))
+
+        provider.assert_awaited_once()
+        self.assertEqual(first, second)
+        self.assertTrue(key.startswith("arasaac-pictogram-v1:"))
+        self.assertNotIn("amistad", key)
+        self.assertEqual(cache.get.call_args_list, [call(key), call(key)])
+        self.assertEqual(
+            set(cached_value),
+            {"pictogram_id", "label", "plural"},
+        )
+        cache.set.assert_called_once_with(
+            key,
+            cached_value,
+            timeout=86_400,
+        )
+
+    @override_settings(**_CACHE_TEST_SETTINGS)
+    def test_not_found_is_cached_for_fifteen_minutes_and_reused(self) -> None:
+        """Reuse a short-lived negative result without a second provider call."""
+        cache = Mock()
+        cache.get.return_value = None
+        cache.set.return_value = True
+        provider = AsyncMock(return_value=None)
+        with patch(
+            "backend.interpretation.arasaac.service.search_concept",
+            provider,
+        ):
+            with patch(
+                "backend.interpretation.arasaac.service.caches",
+                {"arasaac": cache},
+            ):
+                first = _get_visual_support(concepts=("ausente",))
+                key, cached_value = cache.set.call_args.args
+                cache.get.return_value = cached_value
+                second = _get_visual_support(concepts=("ausente",))
+
+        provider.assert_awaited_once()
+        self.assertEqual(first, second)
+        self.assertEqual(cached_value, "not_found")
+        cache.set.assert_called_once_with(
+            key,
+            cached_value,
+            timeout=900,
+        )
+
+    @override_settings(**_CACHE_TEST_SETTINGS)
+    def test_invalid_cached_value_is_replaced_from_the_provider(self) -> None:
+        """Reject invalid cached metadata and store a validated replacement."""
+        cache = Mock()
+        cache.get.return_value = {
+            "pictogram_id": 9829,
+            "label": "<script>",
+            "plural": False,
+        }
+        cache.set.return_value = True
+        provider = AsyncMock(return_value=_available_pictogram("seguridad"))
+        with patch(
+            "backend.interpretation.arasaac.service.search_concept",
+            provider,
+        ):
+            with patch(
+                "backend.interpretation.arasaac.service.caches",
+                {"arasaac": cache},
+            ):
+                result = _get_visual_support(concepts=("seguridad",))
+
+        provider.assert_awaited_once()
+        self.assertEqual(result.status, "complete")
+        self.assertEqual(result.items[0].label, "seguridad")
+        self.assertEqual(
+            cache.set.call_args.args[1],
+            {"pictogram_id": 9829, "label": "seguridad", "plural": False},
+        )
+
+    @override_settings(**_CACHE_TEST_SETTINGS)
+    def test_cache_failures_preserve_valid_provider_results(self) -> None:
+        """Treat optional cache read and write failures as sanitized misses."""
+        private_detail = "redis://private-user:private-password@cache.internal"
+
+        for operation in ("read", "write"):
+            with self.subTest(operation=operation):
+                cache = Mock()
+                cache.get.return_value = None
+                cache.set.return_value = True
+                getattr(cache, "get" if operation == "read" else "set").side_effect = (
+                    RuntimeError(private_detail)
+                )
+                provider = AsyncMock(
+                    return_value=_available_pictogram("concepto privado")
+                )
+
+                with patch(
+                    "backend.interpretation.arasaac.service.search_concept",
+                    provider,
+                ):
+                    with patch(
+                        "backend.interpretation.arasaac.service.caches",
+                        {"arasaac": cache},
+                    ):
+                        with self.assertLogs(
+                            "backend.interpretation.arasaac",
+                            level="WARNING",
+                        ) as captured:
+                            result = _get_visual_support(
+                                concepts=("concepto privado",),
+                            )
+
+                rendered_logs = " ".join(captured.output)
+                provider.assert_awaited_once()
+                self.assertEqual(result.status, "complete")
+                self.assertIn(f"operation={operation}", rendered_logs)
+                self.assertNotIn("concepto privado", rendered_logs)
+                self.assertNotIn(private_detail, rendered_logs)
+
+    @override_settings(**_CACHE_TEST_SETTINGS)
     def test_timeout_fails_fast_and_redacts_concepts(self) -> None:
-        """Use one failed call and mark every remaining concept unavailable."""
+        """Stop after one failure while preserving a later cached result."""
         calls = 0
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -40,24 +218,39 @@ class ArasaacServiceTests(SimpleTestCase):
                 request=request,
             )
 
-        with self.assertLogs(
-            "backend.interpretation.arasaac",
-            level="WARNING",
-        ) as captured:
-            result = _get_visual_support(
-                concepts=("concepto reservado", "segundo concepto"),
-                transport=httpx.MockTransport(handler),
-            )
+        cache = Mock()
+        cache.get.side_effect = [
+            None,
+            {"pictogram_id": 9829, "label": "segundo concepto", "plural": False},
+        ]
+        cache.set.return_value = True
+        with patch(
+            "backend.interpretation.arasaac.service.caches",
+            {"arasaac": cache},
+        ):
+            with self.assertLogs(
+                "backend.interpretation.arasaac",
+                level="WARNING",
+            ) as captured:
+                result = _get_visual_support(
+                    concepts=("concepto reservado", "segundo concepto"),
+                    transport=httpx.MockTransport(handler),
+                )
 
         self.assertEqual(calls, 1)
         self.assertEqual(
             [item.status for item in result.items],
-            ["temporarily_unavailable", "temporarily_unavailable"],
+            ["temporarily_unavailable", "available"],
+        )
+        self.assertEqual(
+            [item.concept for item in result.items],
+            ["concepto reservado", "segundo concepto"],
         )
         rendered_logs = " ".join(captured.output)
         self.assertIn("error_type=timeout", rendered_logs)
         self.assertNotIn("concepto reservado", rendered_logs)
         self.assertNotIn("private", rendered_logs)
+        cache.set.assert_not_called()
 
     @override_settings(
         ARASAAC_CONNECT_TIMEOUT_SECONDS=1,
