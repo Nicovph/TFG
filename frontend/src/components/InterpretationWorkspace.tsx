@@ -1,10 +1,11 @@
 /**
  * InterpretationWorkspace.tsx renders the transient interpretation form,
- * validated result, and provisional visual-concept controls.
+ * validated result, and optional ARASAAC visual support.
  */
 
 import { useEffect, useRef } from 'react'
 import type {
+  AvailablePictogram,
   ContextSpeakerRelation,
   Interpretation,
   InterpretationRequest,
@@ -15,7 +16,7 @@ import type {
   InterpretationTextField,
 } from '../hooks/useInterpretationWorkspace'
 import type { PreferenceRequestStatus } from '../hooks/useUserPreferences'
-import { VISUAL_SUPPORT_DIALOG_ID } from './VisualSupportDialog'
+import { VisualSupport } from './VisualSupport'
 import visuallyHiddenStyles from './VisuallyHidden.module.css'
 import styles from './InterpretationWorkspace.module.css'
 
@@ -75,16 +76,19 @@ interface InterpretationWorkspaceProps {
   preferenceStatus: PreferenceRequestStatus
   remainingCharacters: number
   request: InterpretationRequest
-  showVisualSupport: boolean
+  visualSupportEnabled: boolean
   onAcknowledgmentChange: (acknowledged: boolean) => void
   onContextToggle: () => void
   onSpeakerChange: (
     field: ContextSpeakerField,
     relation: ContextSpeakerRelation,
   ) => void
-  onSubmit: (externalProcessingAcknowledged: boolean) => Promise<void>
+  onSubmit: (
+    externalProcessingAcknowledged: boolean,
+    includeVisualSupport: boolean,
+  ) => Promise<void>
   onTextChange: (field: InterpretationTextField, value: string) => void
-  onVisualSupportOpen: (visualLabel: string) => void
+  onVisualSupportOpen: (pictogram: AvailablePictogram) => void
 }
 
 /**
@@ -122,7 +126,7 @@ export function InterpretationWorkspace({
   preferenceStatus,
   remainingCharacters,
   request,
-  showVisualSupport,
+  visualSupportEnabled,
   onAcknowledgmentChange,
   onContextToggle,
   onSpeakerChange,
@@ -164,7 +168,7 @@ export function InterpretationWorkspace({
             return
           }
 
-          void onSubmit(true)
+          void onSubmit(true, visualSupportEnabled)
         }}
       >
         <div className={styles.modeControls} aria-label="Modo de entrada">
@@ -331,23 +335,11 @@ export function InterpretationWorkspace({
                   </section>
                 ) : null}
 
-                {showVisualSupport && interpretation.visualConcepts.length > 0 ? (
-                  <section>
-                    <h3>Conceptos visuales</h3>
-                    <div className={styles.conceptList}>
-                      {interpretation.visualConcepts.map((concept) => (
-                        <button
-                          type="button"
-                          key={concept}
-                          aria-controls={VISUAL_SUPPORT_DIALOG_ID}
-                          aria-haspopup="dialog"
-                          onClick={() => onVisualSupportOpen(concept)}
-                        >
-                          {concept}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
+                {visualSupportEnabled && interpretation.visualSupport ? (
+                  <VisualSupport
+                    result={interpretation.visualSupport}
+                    onOpen={onVisualSupportOpen}
+                  />
                 ) : null}
               </div>
             ) : (
@@ -378,7 +370,10 @@ export function InterpretationWorkspace({
           comunes del mensaje y los contextos. El texto resultante se enviará al
           asistente virtual para generar la interpretación. Esta reducción no 
           puede detectar todos los datos personales. La aplicación no almacenará 
-          estos textos ni la respuesta.
+          estos textos ni la respuesta. Si el apoyo visual está activado, se
+          enviarán a ARASAAC únicamente conceptos visuales simples derivados de la
+          interpretación para intentar obtener pictogramas relacionados. No se enviarán
+          el mensaje introducido ni los contextos.
         </p>
         <div className={styles.processingActions}>
           <button
@@ -395,7 +390,7 @@ export function InterpretationWorkspace({
             onClick={() => {
               processingDialogRef.current?.close()
               onAcknowledgmentChange(true)
-              void onSubmit(true)
+              void onSubmit(true, visualSupportEnabled)
             }}
           >
             Continuar y enviar

@@ -1,0 +1,98 @@
+/* VisualSupport.module.css styles ARASAAC cards and the visual fallback. */
+
+.visualSupport {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.visualSupport h3,
+.visualSupport p,
+.pictogramList {
+  margin: 0;
+}
+
+.pictogramList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  gap: var(--space-xs);
+  padding: 0;
+  list-style: none;
+}
+
+.visualSupport .pictogramList li {
+  display: grid;
+  margin-top: 0;
+}
+
+.pictogramList button {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-xs);
+  border: var(--border-width-thin) solid var(--color-support);
+  border-radius: var(--radius-medium);
+  background: var(--color-surface);
+  color: var(--color-support-strong);
+  cursor: pointer;
+}
+
+.pictogramList img {
+  width: min(100%, 132px);
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: var(--radius-small);
+  background: var(--color-pictogram-surface);
+}
+
+.pictogramList button span {
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.pictogramList button:hover {
+  background: var(--color-action-soft);
+}
+
+.pictogramList button:focus-visible,
+.attribution a:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.message {
+  color: var(--color-text-copy);
+}
+
+.fallback {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-sm);
+  text-align: center;
+}
+
+.fallback img {
+  width: min(180px, 68%);
+  height: auto;
+}
+
+.fallback p {
+  max-width: 42ch;
+  color: var(--color-text-copy);
+}
+
+.attribution {
+  display: grid;
+  gap: var(--space-2xs);
+  padding-top: var(--space-xs);
+  border-top: var(--border-width-thin) solid var(--color-border-muted);
+  color: var(--color-text-copy);
+  font-size: 0.78rem;
+}
+
+.attribution a {
+  width: fit-content;
+  color: var(--color-support-deep);
+}

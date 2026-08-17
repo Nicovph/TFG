@@ -112,7 +112,7 @@ function App() {
     request,
     requestInterpretation,
     resetInterpretationWorkspace,
-    selectedVisualLabel,
+    selectedPictogram,
     toggleContext,
     updateAcknowledgment,
     updateSpeaker,
@@ -149,10 +149,7 @@ function App() {
       ? 'Volver al área de interpretación'
       : 'Volver a la página de inicio'
   const infoPage = isInfoView(renderedView) ? INFO_PAGES[renderedView] : null
-  const showVisualSupport =
-    preferences.visualSupport === 'enabled' &&
-    interpretationStatus === 'ready' &&
-    interpretation !== null
+  const visualSupportEnabled = preferences.visualSupport === 'enabled'
 
   /**
    * Updates the storage whenever the view changes.
@@ -454,7 +451,7 @@ function App() {
               preferenceStatus={preferenceStatus}
               remainingCharacters={remainingCharacters}
               request={request}
-              showVisualSupport={showVisualSupport}
+              visualSupportEnabled={visualSupportEnabled}
               onAcknowledgmentChange={updateAcknowledgment}
               onContextToggle={toggleContext}
               onSpeakerChange={updateSpeaker}
@@ -468,10 +465,9 @@ function App() {
 
       <Drawer open={menuOpen} onClose={closeTransientPanels} onNavigate={handleNavigate} />
 
-      {selectedVisualLabel ? (
+      {selectedPictogram ? (
         <VisualSupportDialog
-          visualLabel={selectedVisualLabel}
-          logoSrc={logoMark}
+          pictogram={selectedPictogram}
           onClose={closeVisualSupport}
         />
       ) : null}

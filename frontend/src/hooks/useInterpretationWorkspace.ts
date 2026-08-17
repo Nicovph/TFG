@@ -1,11 +1,12 @@
 /**
  * useInterpretationWorkspace.ts owns transient interpretation input, results,
- * cancellation, and the provisional visual-concept dialog state.
+ * cancellation, and the selected ARASAAC pictogram dialog state.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, getInterpretation } from '../api'
 import type {
+  AvailablePictogram,
   ContextSpeakerRelation,
   Interpretation,
   InterpretationRequest,
@@ -47,12 +48,15 @@ interface InterpretationWorkspaceHookResult {
   errorTitle: string
   interpretation: Interpretation | null
   interpretationStatus: InterpretationStatus
-  openVisualSupport: (visualLabel: string) => void
+  openVisualSupport: (pictogram: AvailablePictogram) => void
   remainingCharacters: number
   request: InterpretationRequest
-  requestInterpretation: (externalProcessingAcknowledged: boolean) => Promise<void>
+  requestInterpretation: (
+    externalProcessingAcknowledged: boolean,
+    includeVisualSupport: boolean,
+  ) => Promise<void>
   resetInterpretationWorkspace: () => void
-  selectedVisualLabel: string | null
+  selectedPictogram: AvailablePictogram | null
   toggleContext: () => void
   updateAcknowledgment: (acknowledged: boolean) => void
   updateSpeaker: (
@@ -166,7 +170,8 @@ export function useInterpretationWorkspace(): InterpretationWorkspaceHookResult 
     useState<InterpretationStatus>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [errorTitle, setErrorTitle] = useState('No se pudo interpretar el mensaje')
-  const [selectedVisualLabel, setSelectedVisualLabel] = useState<string | null>(null)
+  const [selectedPictogram, setSelectedPictogram] =
+    useState<AvailablePictogram | null>(null)
   const activeRequestRef = useRef<AbortController | null>(null)
 
   const remainingCharacters = Math.max(
@@ -189,7 +194,7 @@ export function useInterpretationWorkspace(): InterpretationWorkspaceHookResult 
     setInterpretation(null)
     setInterpretationStatus('idle')
     setErrorMessage(null)
-    setSelectedVisualLabel(null)
+    setSelectedPictogram(null)
   }, [cancelInterpretationRequest])
 
   // Register cancelInterpretationRequest as cleanup so any in-flight request
@@ -295,9 +300,11 @@ export function useInterpretationWorkspace(): InterpretationWorkspaceHookResult 
    * Args:
    *   externalProcessingAcknowledged: Whether the user confirmed the notice
    *     immediately before the first external request in this workspace.
+   *   includeVisualSupport: Whether Django should resolve visual concepts in ARASAAC.
    */
   const requestInterpretation = useCallback(async (
     externalProcessingAcknowledged: boolean,
+    includeVisualSupport: boolean,
   ) => {
     if (!canSubmit || !externalProcessingAcknowledged) return
 
@@ -305,13 +312,14 @@ export function useInterpretationWorkspace(): InterpretationWorkspaceHookResult 
     const controller = new AbortController()
     activeRequestRef.current = controller
     setInterpretation(null)
-    setSelectedVisualLabel(null)
+    setSelectedPictogram(null)
     setErrorMessage(null)
     setInterpretationStatus('loading')
 
     try {
       const payload = await getInterpretation(
         { ...request, externalProcessingAcknowledged },
+        includeVisualSupport,
         controller.signal,
       )
 
@@ -348,17 +356,17 @@ export function useInterpretationWorkspace(): InterpretationWorkspaceHookResult 
     setInterpretation(null)
     setInterpretationStatus('idle')
     setErrorMessage(null)
-    setSelectedVisualLabel(null)
+    setSelectedPictogram(null)
   }, [cancelInterpretationRequest])
 
-  /** Open the provisional visual-support dialog for one validated concept. */
-  const openVisualSupport = useCallback((visualLabel: string) => {
-    setSelectedVisualLabel(visualLabel)
+  /** Open the visual-support dialog for one validated ARASAAC pictogram. */
+  const openVisualSupport = useCallback((pictogram: AvailablePictogram) => {
+    setSelectedPictogram(pictogram)
   }, [])
 
-  /** Close the provisional visual-support dialog. */
+  /** Close the enlarged pictogram dialog. */
   const closeVisualSupport = useCallback(() => {
-    setSelectedVisualLabel(null)
+    setSelectedPictogram(null)
   }, [])
 
   return {
@@ -374,7 +382,7 @@ export function useInterpretationWorkspace(): InterpretationWorkspaceHookResult 
     request,
     requestInterpretation,
     resetInterpretationWorkspace,
-    selectedVisualLabel,
+    selectedPictogram,
     toggleContext,
     updateAcknowledgment,
     updateSpeaker,

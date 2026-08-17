@@ -238,24 +238,6 @@
   font-size: 1.4rem;
 }
 
-.conceptList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-}
-
-.conceptList button {
-  min-height: 44px;
-  padding: 0 14px;
-  border: var(--border-width-thin) solid var(--color-support);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface);
-  color: var(--color-support-deep);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
-
 .submitButton {
   width: fit-content;
   min-width: 110px;
@@ -323,7 +305,6 @@
 .contextField select:focus-visible,
 .contextToggle:focus-visible,
 .resultContent h2:focus-visible,
-.conceptList button:focus-visible,
 .submitButton:focus-visible,
 .cancelProcessingButton:focus-visible,
 .confirmProcessingButton:focus-visible {

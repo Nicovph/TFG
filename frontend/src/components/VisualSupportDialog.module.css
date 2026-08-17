@@ -1,42 +1,30 @@
-/* VisualSupportDialog.module.css styles the accessible visual support modal dialog. */
+/* VisualSupportDialog.module.css styles the native pictogram preview dialog. */
 
-/* Center the modal above the application while preserving safe viewport padding. */
-.visualSupportOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-dialog);
-  display: grid;
-  place-items: center;
-  padding: var(--space-lg);
-}
-
-/* The backdrop blocks background interaction and acts as a dismiss target. */
-.visualSupportBackdrop {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  background: var(--color-overlay);
-  cursor: pointer;
-}
-
-/* Keep dialog content above the backdrop within the overlay stacking context. */
 .visualSupportDialog {
-  width: min(320px, calc(100vw - 48px));
-  position: relative;
-  z-index: 1;
-  padding: var(--space-lg);
-  display: grid;
-  justify-items: center;
-  gap: 14px;
+  width: min(380px, calc(100% - 40px));
+  max-height: calc(100dvh - 40px);
+  padding: 0;
+  border: var(--border-width-thin) solid var(--color-border-accent-soft);
   border-radius: var(--radius-medium);
   background: var(--color-surface);
+  color: var(--color-text-copy);
   box-shadow: var(--shadow-modal);
 }
 
-/* Place the explicit close action at the dialog's trailing edge. */
-.closeButton {
+.visualSupportDialog::backdrop {
+  background: var(--color-overlay);
+}
+
+.dialogContent {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+}
+
+.dialogContent button {
   justify-self: end;
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 14px;
   border: 0;
   border-radius: var(--radius-small);
@@ -46,22 +34,39 @@
   cursor: pointer;
 }
 
-/* Preserve predictable media dimensions as visual-support content changes. */
-.visualSupportDialog img {
-  width: 128px;
-  height: 128px;
+.dialogContent img,
+.imageFallback {
+  width: min(300px, 72vw);
+  aspect-ratio: 1;
+  border-radius: var(--radius-small);
+  background: var(--color-pictogram-surface);
+}
+
+.dialogContent img {
+  height: auto;
   object-fit: contain;
 }
 
-.visualSupportDialog h2 {
+.imageFallback {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
   margin: 0;
-  color: var(--color-support-deep);
-  font-size: 1.5rem;
+  padding: var(--space-md);
+  background: var(--color-support-soft);
+  color: var(--color-support-strong);
+  text-align: center;
 }
 
-/* Both modal dismissal paths retain a visible keyboard focus indicator. */
-.visualSupportBackdrop:focus-visible,
-.closeButton:focus-visible {
+.dialogContent h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-support-deep);
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.dialogContent button:focus-visible {
   outline: var(--focus-outline);
   outline-offset: var(--focus-outline-offset);
 }

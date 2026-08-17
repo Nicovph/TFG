@@ -34,6 +34,31 @@ export interface InterpretationSignal {
   explanation: string
 }
 
+export interface ArasaacAttribution {
+  text: string
+  termsUrl: 'https://arasaac.org/terms-of-use'
+}
+
+export interface AvailablePictogram {
+  concept: string
+  status: 'available'
+  pictogramId: number
+  label: string
+  imageUrl: string
+}
+
+export interface MissingPictogram {
+  concept: string
+  status: 'not_found' | 'temporarily_unavailable'
+}
+
+export interface VisualSupportResult {
+  status: 'not_requested' | 'complete' | 'partial' | 'unavailable'
+  items: (AvailablePictogram | MissingPictogram)[]
+  message: string
+  attribution: ArasaacAttribution | null
+}
+
 export interface Interpretation {
   kind: 'pragmatic_interpretation'
   interpretation: string
@@ -43,6 +68,7 @@ export interface Interpretation {
   signals: InterpretationSignal[]
   visualConcepts: string[]
   showContentWarning: boolean
+  visualSupport: VisualSupportResult | null
 }
 
 export interface SessionStatus {

@@ -9,10 +9,14 @@ import type {
 } from './data/preferences'
 import type {
   ApiHealth,
+  ArasaacAttribution,
+  AvailablePictogram,
   Interpretation,
   InterpretationRequest,
   InterpretationSignalKind,
+  MissingPictogram,
   SessionStatus,
+  VisualSupportResult,
 } from './types'
 
 // Keep this value synchronized with Django's effective CSRF_COOKIE_NAME setting,
@@ -114,16 +118,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Check whether a value is an array of strings.
+ * Check whether an object contains exactly one closed set of keys.
  *
  * Args:
- *   value: The value returned by JSON parsing.
+ *   value: Object returned by the same-origin API.
+ *   expectedKeys: Complete list of permitted keys.
  *
  * Returns:
- *   True when every array item is a string; otherwise false.
+ *   True when no key is missing or unexpected; otherwise false.
  */
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+function hasExactKeys(
+  value: Record<string, unknown>,
+  expectedKeys: readonly string[],
+): boolean {
+  return (
+    Object.keys(value).length === expectedKeys.length &&
+    expectedKeys.every((key) => Object.hasOwn(value, key))
+  )
 }
 
 /**
@@ -437,11 +448,202 @@ const INTERPRETATION_SIGNAL_KINDS = [
   // Literal tuple + compile-time check that every value belongs to InterpretationSignalKind.
 ] as const satisfies readonly InterpretationSignalKind[]
 
+const ARASAAC_ATTRIBUTION_TEXT =
+  'Autor pictogramas: Sergio Palao. Procedencia: ARASAAC (https://arasaac.org). Licencia: CC (BY-NC-SA). Propiedad: Gobierno de Aragón (España).'
+const ARASAAC_TERMS_URL = 'https://arasaac.org/terms-of-use' as const
+// Keep the runtime allowlist exhaustive with the public status union.
+const VISUAL_SUPPORT_STATUSES = {
+  not_requested: true,
+  complete: true,
+  partial: true,
+  unavailable: true,
+} satisfies Record<VisualSupportResult['status'], true>
+
+/**
+ * Check one normalized string against a closed character budget.
+ *
+ * Args:
+ *   value: Untrusted value returned by Django.
+ *   minimum: Smallest accepted string length.
+ *   maximum: Largest accepted string length.
+ *
+ * Returns:
+ *   True when the value is a trimmed string inside the limits; otherwise false.
+ */
+function isBoundedTrimmedString(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length >= minimum &&
+    value.length <= maximum &&
+    value.trim() === value
+  )
+}
+
+/**
+ * Parse one discriminated visual-support item returned by Django.
+ *
+ * Args:
+ *   value: Untrusted available or missing pictogram payload.
+ *
+ * Returns:
+ *   A closed camel-cased pictogram item.
+ *
+ * Raises:
+ *   Error: If the item, identifier, label, or image URL is invalid.
+ */
+function parseVisualSupportItem(
+  value: unknown,
+): AvailablePictogram | MissingPictogram {
+  if (!isRecord(value) || !isBoundedTrimmedString(value.concept, 1, 64)) {
+    throw new Error('invalid_visual_support_payload')
+  }
+
+  if (value.status === 'available') {
+    if (
+      !hasExactKeys(value, [
+        'concept',
+        'status',
+        'pictogram_id',
+        'label',
+        'image_url',
+      ]) ||
+      !Number.isSafeInteger(value.pictogram_id) ||
+      (value.pictogram_id as number) <= 0 ||
+      !isBoundedTrimmedString(value.label, 1, 96) ||
+      typeof value.image_url !== 'string'
+    ) {
+      throw new Error('invalid_visual_support_payload')
+    }
+
+    const pictogramId = value.pictogram_id as number
+    const imageRoot =
+      `https://static.arasaac.org/pictograms/${pictogramId}/${pictogramId}`
+    if (
+      value.image_url !== `${imageRoot}_300.png` &&
+      value.image_url !== `${imageRoot}_plural_300.png`
+    ) {
+      throw new Error('invalid_visual_support_payload')
+    }
+
+    return {
+      concept: value.concept,
+      status: value.status,
+      pictogramId,
+      label: value.label,
+      imageUrl: value.image_url,
+    }
+  }
+
+  if (
+    (value.status === 'not_found' ||
+      value.status === 'temporarily_unavailable') &&
+    hasExactKeys(value, ['concept', 'status'])
+  ) {
+    return { concept: value.concept, status: value.status }
+  }
+
+  throw new Error('invalid_visual_support_payload')
+}
+
+/**
+ * Parse the fixed ARASAAC credit attached to displayed pictograms.
+ *
+ * Args:
+ *   value: Untrusted attribution payload returned by Django.
+ *
+ * Returns:
+ *   The closed camel-cased attribution.
+ *
+ * Raises:
+ *   Error: If the attribution differs from the backend contract.
+ */
+function parseArasaacAttribution(value: unknown): ArasaacAttribution {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ['text', 'terms_url']) ||
+    value.text !== ARASAAC_ATTRIBUTION_TEXT ||
+    value.terms_url !== ARASAAC_TERMS_URL
+  ) {
+    throw new Error('invalid_visual_support_payload')
+  }
+
+  return { text: value.text, termsUrl: value.terms_url }
+}
+
+/**
+ * Parse and cross-check the complete visual-support extension.
+ *
+ * Args:
+ *   value: Untrusted extension returned by the interpretation endpoint.
+ *   expectedConcepts: Validated concepts that each item must preserve in order.
+ *
+ * Returns:
+ *   A coherent camel-cased result safe for the visual-support components.
+ *
+ * Raises:
+ *   Error: If fields, item tags, summary, message, or attribution disagree.
+ */
+function parseVisualSupport(
+  value: unknown,
+  expectedConcepts: readonly string[],
+): VisualSupportResult {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ['status', 'items', 'message', 'attribution']) ||
+    typeof value.status !== 'string' ||
+    !Object.hasOwn(VISUAL_SUPPORT_STATUSES, value.status) ||
+    !Array.isArray(value.items) ||
+    value.items.length > 10 ||
+    !isBoundedTrimmedString(value.message, 0, 140)
+  ) {
+    throw new Error('invalid_visual_support_payload')
+  }
+
+  const items = value.items.map((item) => parseVisualSupportItem(item))
+  const availableCount = items.filter((item) => item.status === 'available').length
+  const expectedStatus =
+    items.length === 0
+      ? 'not_requested'
+      : availableCount === items.length
+        ? 'complete'
+        : availableCount > 0
+          ? 'partial'
+          : 'unavailable'
+  const attribution =
+    value.attribution === null
+      ? null
+      : parseArasaacAttribution(value.attribution)
+  const requiresMessage =
+    expectedStatus === 'partial' || expectedStatus === 'unavailable'
+
+  if (
+    items.length !== expectedConcepts.length ||
+    items.some((item, index) => item.concept !== expectedConcepts[index]) ||
+    value.status !== expectedStatus ||
+    Boolean(value.message) !== requiresMessage ||
+    Boolean(attribution) !== (availableCount > 0)
+  ) {
+    throw new Error('invalid_visual_support_payload')
+  }
+
+  return {
+    status: expectedStatus,
+    items,
+    message: value.message,
+    attribution,
+  }
+}
+
 /**
  * Parse and validate the closed pragmatic interpretation returned by Django.
  *
  * Args:
  *   payload: The JSON value returned by the protected interpretation endpoint.
+ *   includeVisualSupport: Whether the requested contract requires ARASAAC data.
  *
  * Returns:
  *   A camel-cased interpretation safe for React to render as text.
@@ -449,10 +651,29 @@ const INTERPRETATION_SIGNAL_KINDS = [
  * Raises:
  *   Error: If the payload contains missing, extra, or invalid fields.
  */
-function parseInterpretation(payload: unknown): Interpretation {
+function parseInterpretation(
+  payload: unknown,
+  includeVisualSupport: boolean,
+): Interpretation {
+  const expectedKeys = [
+    'kind',
+    'interpretation',
+    'clear_reformulation',
+    'needs_more_context',
+    'context_note',
+    'signals',
+    'visual_concepts',
+    'show_content_warning',
+  ]
+
   if (
     !isRecord(payload) ||
-    Object.keys(payload).length !== 8 ||
+    // Only the requested visual extension may be absent; base fields stay closed.
+    !(
+      hasExactKeys(payload, expectedKeys) ||
+      (includeVisualSupport &&
+        hasExactKeys(payload, [...expectedKeys, 'visual_support']))
+    ) ||
     payload.kind !== 'pragmatic_interpretation' ||
     typeof payload.interpretation !== 'string' ||
     typeof payload.clear_reformulation !== 'string' ||
@@ -469,10 +690,40 @@ function parseInterpretation(payload: unknown): Interpretation {
         ) &&
         typeof signal.explanation === 'string',
     ) ||
-    !isStringArray(payload.visual_concepts) ||
+    !Array.isArray(payload.visual_concepts) ||
+    payload.visual_concepts.length > 10 ||
+    !payload.visual_concepts.every((concept) =>
+      isBoundedTrimmedString(concept, 1, 64),
+    ) ||
     typeof payload.show_content_warning !== 'boolean'
   ) {
     throw new Error('invalid_interpretation_payload')
+  }
+
+  const visualConcepts = payload.visual_concepts as string[]
+  let visualSupport: VisualSupportResult | null = null
+
+  if (includeVisualSupport) {
+    try {
+      visualSupport = parseVisualSupport(
+        payload.visual_support,
+        visualConcepts,
+      )
+    } catch {
+      // Discard an untrusted visual extension without losing valid text output.
+      const items: MissingPictogram[] = visualConcepts.map((concept) => ({
+        concept,
+        status: 'temporarily_unavailable',
+      }))
+      visualSupport = {
+        status: items.length > 0 ? 'unavailable' : 'not_requested',
+        items,
+        message: items.length > 0
+          ? 'El apoyo visual no está disponible. La interpretación de texto sigue disponible.'
+          : '',
+        attribution: null,
+      }
+    }
   }
 
   return {
@@ -482,8 +733,9 @@ function parseInterpretation(payload: unknown): Interpretation {
     needsMoreContext: payload.needs_more_context,
     contextNote: payload.context_note,
     signals: payload.signals as Interpretation['signals'],
-    visualConcepts: payload.visual_concepts,
+    visualConcepts,
     showContentWarning: payload.show_content_warning,
+    visualSupport,
   }
 }
 
@@ -527,6 +779,7 @@ export async function getApiHealth(signal?: AbortSignal): Promise<ApiHealth> {
  *
  * Args:
  *   request: Bounded text, optional context, speaker relations, and notice state.
+ *   includeVisualSupport: Whether Django must resolve validated concepts in ARASAAC.
  *   signal: Optional abort signal used to cancel an obsolete request.
  *
  * Returns:
@@ -534,10 +787,15 @@ export async function getApiHealth(signal?: AbortSignal): Promise<ApiHealth> {
  */
 export async function getInterpretation(
   request: InterpretationRequest,
+  includeVisualSupport: boolean,
   signal?: AbortSignal,
 ): Promise<Interpretation> {
+  const path = includeVisualSupport
+    ? '/api/interpretations/?include=visual_support'
+    : '/api/interpretations/'
+
   return parseInterpretation(
-    await fetchJson('/api/interpretations/', {
+    await fetchJson(path, {
       body: {
         target_message: request.targetMessage,
         previous_context: request.previousContext,
@@ -551,6 +809,7 @@ export async function getInterpretation(
       method: 'POST',
       signal,
     }),
+    includeVisualSupport,
   )
 }
 
