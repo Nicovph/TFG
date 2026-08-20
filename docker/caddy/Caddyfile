@@ -1,0 +1,22 @@
+{
+	# Caddy runs inside Docker and cannot install its CA in the Windows trust store.
+	# Trust installation is performed manually and explicitly on the host.
+	skip_install_trust
+}
+
+localhost {
+	# Issue the localhost certificate from Caddy's private local CA.
+	tls internal
+
+	# Send Django API, Admin, and development static resources to the backend.
+	@django path /api /api/* /admin /admin/* /static /static/*
+
+	handle @django {
+		reverse_proxy backend:8000
+	}
+
+	# Send every non-API request, including Vite HMR WebSockets, to React.
+	handle {
+		reverse_proxy frontend:5173
+	}
+}

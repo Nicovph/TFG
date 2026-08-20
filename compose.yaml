@@ -43,6 +43,7 @@ services:
     volumes:
       # Persistent PostgreSQL storage volume.
       - postgres_data:/var/lib/postgresql/data
+      
       # Mount initialization scripts so PostgreSQL can run them on first startup.
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
       # Mount SQL files used by the init script for database setup.
@@ -131,6 +132,12 @@ services:
       LLM_GLOBAL_REQUESTS_PER_DAY: ${LLM_GLOBAL_REQUESTS_PER_DAY:-}
       LLM_GLOBAL_TOKENS_PER_MINUTE: ${LLM_GLOBAL_TOKENS_PER_MINUTE:-}
       LLM_GLOBAL_TOKENS_PER_DAY: ${LLM_GLOBAL_TOKENS_PER_DAY:-}
+      # Caddy is the only published path to Django and replaces forwarded headers.
+      DJANGO_TRUST_PROXY_SSL_HEADER: "true"
+
+      # The browser must only transmit session and CSRF cookies over HTTPS.
+      DJANGO_SESSION_COOKIE_SECURE: "true"
+      DJANGO_CSRF_COOKIE_SECURE: "true"
       POSTGRES_DB: traductor_tea_db
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
@@ -149,8 +156,7 @@ services:
 
       - source: interpretation_hmac_key
         target: interpretation_hmac_key
-    ports:
-      - "127.0.0.1:8000:8000"
+
     healthcheck: # Checks periodically if Django is working.
       test:
         [
@@ -198,8 +204,7 @@ services:
       # Resolve Django through Compose DNS while preserving the browser-visible
       # Host header in Vite's proxy for Django origin and CSRF validation.
       BACKEND_PROXY_TARGET: http://backend:8000
-    ports:
-      - "127.0.0.1:5173:5173"
+    
     healthcheck:
       test:
         [
@@ -303,6 +308,52 @@ services:
     networks:
       - backend-db
 
+  caddy:
+    image: caddy:2.11.4-alpine
+    init: true
+    restart: unless-stopped
+
+    # Caddy starts only after both upstream development servers are ready.
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+
+    # Publish only the HTTPS edge and its automatic HTTP-to-HTTPS redirect.
+    # Loopback binding prevents access from other devices on the local network.
+    ports:
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
+
+    volumes:
+      # Mount the complete configuration directory to support safe Caddy reloads.
+      - ./docker/caddy:/etc/caddy:ro
+
+      # Preserve the local CA, certificates, private keys, and TLS state.
+      - caddy_data:/data
+      # Preserve Caddy's runtime configuration state.
+      - caddy_config:/config
+
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    security_opt:
+      - no-new-privileges:true
+
+    # Caddy only requires permission to bind ports below 1024.
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+    # Caddy reaches React and Django but never joins the database network.
+    networks:
+      - frontend-backend
+
 secrets:
   postgres_admin_password:
     file: ./.secrets/db-admin-password.txt
@@ -327,6 +378,8 @@ secrets:
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
 
 # Define the shared networks used by services; each service explicitly joins only the networks it requires.
 networks:

@@ -67,7 +67,12 @@ SECRET_KEY = 'django-insecure-y=j0#1e20l)f(%69arj=(zw*ivg70#ni*jn!bghmgh4rpcd=n=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# Accept only the browser hostname and the loopback address used by the
+# container healthcheck in the local HTTPS development environment.
+ALLOWED_HOSTS = [
+    "localhost", 
+    "127.0.0.1",
+    ]
 
 
 # Emit only minimized interpretation metadata to the container standard output.
@@ -507,6 +512,17 @@ if database_user != expected_database_user:
         f"El perfil de base de datos {DATABASE_PROFILE!r} debe usar "
         f"{expected_database_user!r}, no {database_user!r}."
     )
+
+# Trust the original HTTPS scheme only when Django runs behind the controlled
+# Caddy reverse proxy defined by the local Compose stack.
+SECURE_PROXY_SSL_HEADER = (
+    ("HTTP_X_FORWARDED_PROTO", "https")
+    if get_boolean_setting(
+        "DJANGO_TRUST_PROXY_SSL_HEADER",
+        default=False,
+    )
+    else None
+)
 
 # Parse common database connection parameters with safe defaults.
 database_port = get_integer_setting(
