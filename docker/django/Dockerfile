@@ -1,5 +1,4 @@
-# Builds the Django development runtime image for the application service.
-FROM python:3.13.14-slim-bookworm
+FROM python:3.13.15-slim-bookworm
 
 # Avoid Python to write .pyc (Python cache) files in the container, for cleaning and reproducibility
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -15,10 +14,10 @@ RUN addgroup --system appuser \
 WORKDIR /app 
 
 COPY requirements.txt /app/requirements.txt
-# --no-cache-dir: Avoids save cache to reduce space in the container.
-# Uses the pip associated to the Python interpreter defined.
-RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir -r /app/requirements.txt
+# Use the pip bundled with the pinned Python image instead of downloading the
+# latest installer on every build. This removes an uncontrolled version change,
+# while --no-cache-dir prevents package downloads from remaining in the image.
+RUN python -m pip install --no-cache-dir -r /app/requirements.txt
 
 COPY --chown=appuser:appuser manage.py /app/manage.py
 COPY --chown=appuser:appuser Traductor_TEA /app/Traductor_TEA

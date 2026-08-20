@@ -1,5 +1,5 @@
 # Docker Compose file for the Traductor_TEA project.
-# Defines PostgreSQL and Django services for local development.
+# Defines PostgreSQL, Django, and React services for local development.
 
 name: traductor-tea
 
@@ -10,6 +10,14 @@ services:
     # explicitly stopped by the user. This supports resiliency during
     # transient failures and host reboots while preserving intentional stops.
     restart: unless-stopped
+    # PostgreSQL writes operational output to stdout/stderr. Docker's rotating
+    # local driver preserves recent diagnostics without allowing unbounded log
+    # growth on the host (at most three files of about 10 MB before compression).
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
 
     # PostgreSQL container environment variables.
     # The admin password is read from a Docker secret file rather than stored here.
@@ -31,9 +39,6 @@ services:
 
       - source: db_test_config
         target: db_test_config
-
-    ports:
-      - "127.0.0.1:5432:5432"
 
     volumes:
       # Persistent PostgreSQL storage volume.
@@ -60,12 +65,17 @@ services:
       retries: 10
       # Allow PostgreSQL up to 10 seconds to start before health checks begin.
       start_period: 10s
+    # Keep PostgreSQL unexposed at the host boundary. Containerized Django and
+    # migration tasks resolve it by service name on the internal backend-db
+    # network; host-side database access is deliberately unavailable.
+    networks:
+      - backend-db
 
   backend:
     build:
-      context: . # The context is the root of the project. In this way Dockerfilecan copy files from the root of the project.
+      context: . # The context is the root of the project. In this way Dockerfile can copy files from the root of the project.
       dockerfile: docker/django/Dockerfile
-    init: true # Docker executs a little init process inside the container to manage correctly signals and child processes.
+    init: true # Docker executes a little init process inside the container to manage correctly signals and child processes.
     restart: unless-stopped
     # Bound operational stdout/stderr retention and rotate logs automatically.
     logging:
@@ -79,7 +89,8 @@ services:
     environment:
       DJANGO_DB_PROFILE: app
       DJANGO_DB_APP_CREDENTIALS_FILE: /run/secrets/db_app_config
-      # Throws a clear error if not set in .env, preventing silent misconfiguration.
+      # The integrated Compose stack has an explicit React origin, so require its
+      # post-callback URL instead of relying on Django's standalone same-origin fallback.
       FRONTEND_AUTH_RETURN_URL: ${FRONTEND_AUTH_RETURN_URL:?Set FRONTEND_AUTH_RETURN_URL in .env}
       GOOGLE_OIDC_CLIENT_ID: ${GOOGLE_OIDC_CLIENT_ID:?Set GOOGLE_OIDC_CLIENT_ID in .env}
       GOOGLE_OIDC_CLIENT_SECRET_FILE: /run/secrets/google_oidc_client_secret
@@ -153,6 +164,65 @@ services:
       timeout: 5s
       retries: 6
       start_period: 20s # Give Django an initial 20 seconds of leeway before it starts penalizing healthcheck failures.
+    # The image already runs as the unprivileged appuser. Prevent setuid/setgid
+    # binaries or file capabilities from granting additional privileges later.
+    security_opt:
+      - no-new-privileges:true
+    # Django only needs ordinary files, TCP sockets, and port 8000; it requires
+    # no Linux capabilities, so remove the complete capability bounding set.
+    cap_drop:
+      - ALL
+    networks:
+      frontend-backend:
+        # Select the non-internal network as Django's default gateway so calls
+        # to Google, Groq, and ARASAAC do not depend on network attachment order.
+        gw_priority: 1
+      backend-db:
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/react/Dockerfile
+    init: true
+    restart: unless-stopped
+    # Bound operational stdout/stderr retention and rotate logs automatically.
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      # Resolve Django through Compose DNS while preserving the browser-visible
+      # Host header in Vite's proxy for Django origin and CSRF validation.
+      BACKEND_PROXY_TARGET: http://backend:8000
+    ports:
+      - "127.0.0.1:5173:5173"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          # Executes the provided JavaScript code as a single-line argument.
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:5173/', { signal: AbortSignal.timeout(3000) }).then((response) => process.exit(response.ok ? 0 : 1), () => process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    # Prevent privilege escalation via setuid/setgid binaries and file capabilities.
+    security_opt:
+      - no-new-privileges:true
+    # Drop every Linux capability (the individual privileges that control what
+    # "root" can actually do, such as binding low ports, changing ownership, etc.)
+    # so the container starts with zero special privileges
+    cap_drop:
+      - ALL
+    networks:
+      - frontend-backend
 
   backend-migrate:
     # This prevents the service from starting in a normal docker compose up.
@@ -179,6 +249,59 @@ services:
     secrets:
       - source: db_migrate_config
         target: db_migrate_config
+    # Migrations need PostgreSQL DDL privileges, not operating-system privilege
+    # escalation or Linux capabilities; apply the same container hardening.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - backend-db
+
+  backend-test:
+    # Tests are an explicit one-off task and must not start during the normal
+    # application lifecycle.
+    profiles:
+      - test
+    build:
+      context: .
+      dockerfile: docker/django/Dockerfile
+    init: true
+    # It will never restart automatically if it stops or fails.
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "manage.py", "test"]
+    environment:
+      # Keep Django's database-profile validation and use the dedicated role
+      # that is allowed to create and destroy temporary test databases.
+      DJANGO_DB_PROFILE: test
+      DJANGO_DB_TEST_CREDENTIALS_FILE: /run/secrets/db_test_config
+      # The ordinary suite mocks external providers and must not require or
+      # receive their production credentials.
+      LLM_PROVIDER_REQUIRED: "false"
+      POSTGRES_DB: traductor_tea_db
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_CONN_MAX_AGE: "0"
+      POSTGRES_CONNECT_TIMEOUT: "5"
+      POSTGRES_SSLMODE: disable
+    secrets:
+      # Grant the test task only its PostgreSQL credentials. In particular, it
+      # receives no Google, Groq, application, or migration secrets.
+      - source: db_test_config
+        target: db_test_config
+    # Match the backend hardening: the test runner needs neither privilege
+    # escalation nor Linux capabilities.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # The internal-only network provides PostgreSQL access but no normal route
+    # to external services, so accidental real provider calls fail closed.
+    networks:
+      - backend-db
 
 secrets:
   postgres_admin_password:
@@ -204,3 +327,14 @@ secrets:
 
 volumes:
   postgres_data:
+
+# Define the shared networks used by services; each service explicitly joins only the networks it requires.
+networks:
+  # React can reach Django, and Django uses this non-internal network for the
+  # external HTTPS services required by authentication and interpretation.
+  frontend-backend:
+  # Keep database traffic on an externally isolated network. PostgreSQL, Django,
+  # and the migration task retain mutual communication on this network, while
+  # PostgreSQL and migrations receive no normal direct route to the Internet.
+  backend-db:
+    internal: true
