@@ -56,6 +56,7 @@
   color: var(--color-text-strong);
 }
 
+/* Distinguish keyboard focus and pending persistence without replacing native semantics. */
 .preferenceField select:focus-visible {
   outline: var(--focus-outline);
   outline-offset: var(--focus-outline-offset);
@@ -86,6 +87,7 @@
   background: var(--color-action-soft);
 }
 
+/* Keep preference recovery adjacent to the status message that explains the failure. */
 .retryButton {
   min-height: 40px;
   padding: var(--space-xs) var(--space-sm);
@@ -97,6 +99,7 @@
   cursor: pointer;
 }
 
+/* Reuse the application focus treatment for the recovery action. */
 .retryButton:focus-visible {
   outline: var(--focus-outline);
   outline-offset: var(--focus-outline-offset);

@@ -34,6 +34,7 @@
   object-fit: contain;
 }
 
+/* Scale the product name fluidly while retaining the shared gradient identity. */
 .homeTitle {
   margin: 0;
   color: var(--color-text-muted);
@@ -91,6 +92,7 @@
   object-fit: contain;
 }
 
+/* Preserve distinct pointer states without altering the button geometry. */
 .googleButton:hover {
   background: var(--google-button-background-hover);
   box-shadow: var(--google-button-shadow-hover);

@@ -79,6 +79,7 @@
   --z-dialog: 80;
   --z-tooltip: 100;
 
+  /* Shared shapes and elevations distinguish controls, popovers, and modal layers. */
   --radius-small: 6px;
   --radius-medium: 8px;
   --radius-large: 14px;

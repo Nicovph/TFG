@@ -1,5 +1,6 @@
 /* VisualSupportDialog.module.css styles the native pictogram preview dialog. */
 
+/* Bound the native modal to the viewport while leaving focus management to the browser. */
 .visualSupportDialog {
   width: min(380px, calc(100% - 40px));
   max-height: calc(100dvh - 40px);
@@ -11,10 +12,12 @@
   box-shadow: var(--shadow-modal);
 }
 
+/* Dim background content to make the active modal context visually explicit. */
 .visualSupportDialog::backdrop {
   background: var(--color-overlay);
 }
 
+/* Stack the close action, visual, and label in a centered reading order. */
 .dialogContent {
   display: grid;
   justify-items: center;
@@ -22,6 +25,7 @@
   padding: var(--space-lg);
 }
 
+/* Keep the close action at the trailing edge with a touch-friendly target. */
 .dialogContent button {
   justify-self: end;
   min-height: 44px;
@@ -34,6 +38,7 @@
   cursor: pointer;
 }
 
+/* Reserve an identical square for the pictogram and its delivery-time fallback. */
 .dialogContent img,
 .imageFallback {
   width: min(300px, 72vw);
@@ -47,6 +52,7 @@
   object-fit: contain;
 }
 
+/* Show a readable status in the same space when the external image cannot load. */
 .imageFallback {
   box-sizing: border-box;
   display: grid;
@@ -58,6 +64,7 @@
   text-align: center;
 }
 
+/* Allow long validated labels to wrap without overflowing the modal. */
 .dialogContent h2 {
   margin: 0;
   overflow-wrap: anywhere;
@@ -66,6 +73,7 @@
   text-align: center;
 }
 
+/* Preserve a visible keyboard-focus indicator on the modal close action. */
 .dialogContent button:focus-visible {
   outline: var(--focus-outline);
   outline-offset: var(--focus-outline-offset);

@@ -1,16 +1,19 @@
 /* VisualSupport.module.css styles ARASAAC cards and the visual fallback. */
 
+/* Keep pictograms, status messages, and attribution in one ordered content region. */
 .visualSupport {
   display: grid;
   gap: var(--space-sm);
 }
 
+/* Let the component grid control spacing instead of browser-default margins. */
 .visualSupport h3,
 .visualSupport p,
 .pictogramList {
   margin: 0;
 }
 
+/* Fill available space with readable cards while preserving a practical minimum width. */
 .pictogramList {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
@@ -19,11 +22,13 @@
   list-style: none;
 }
 
+/* Reset interpretation-result list spacing before turning each item into a card cell. */
 .visualSupport .pictogramList li {
   display: grid;
   margin-top: 0;
 }
 
+/* Make the complete pictogram card an accessible pointer and keyboard target. */
 .pictogramList button {
   display: grid;
   justify-items: center;
@@ -38,6 +43,7 @@
   cursor: pointer;
 }
 
+/* Preserve the pictogram aspect ratio without cropping externally supplied artwork. */
 .pictogramList img {
   width: min(100%, 132px);
   height: auto;
@@ -47,25 +53,30 @@
   background: var(--color-pictogram-surface);
 }
 
+/* Allow long validated labels to wrap instead of widening the card grid. */
 .pictogramList button span {
   overflow-wrap: anywhere;
   font-weight: 700;
 }
 
+/* Provide pointer feedback without changing the card dimensions. */
 .pictogramList button:hover {
   background: var(--color-action-soft);
 }
 
+/* Use the shared visible focus treatment for cards and the external terms link. */
 .pictogramList button:focus-visible,
 .attribution a:focus-visible {
   outline: var(--focus-outline);
   outline-offset: var(--focus-outline-offset);
 }
 
+/* Render provider and partial-loading messages as secondary result copy. */
 .message {
   color: var(--color-text-copy);
 }
 
+/* Center the fallback illustration and explanation when visual support is unavailable. */
 .fallback {
   display: grid;
   justify-items: center;
@@ -78,11 +89,13 @@
   height: auto;
 }
 
+/* Limit fallback copy to a comfortable line length. */
 .fallback p {
   max-width: 42ch;
   color: var(--color-text-copy);
 }
 
+/* Separate mandatory ARASAAC attribution from generated interpretation content. */
 .attribution {
   display: grid;
   gap: var(--space-2xs);
@@ -92,6 +105,7 @@
   font-size: 0.78rem;
 }
 
+/* Keep the terms link only as wide as its label so its focus area remains predictable. */
 .attribution a {
   width: fit-content;
   color: var(--color-support-deep);

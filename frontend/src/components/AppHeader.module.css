@@ -32,6 +32,7 @@
   cursor: pointer;
 }
 
+/* Keep the product identity visually lightweight while retaining button semantics. */
 .brandButton {
   border: 0;
   background: transparent;
@@ -39,6 +40,7 @@
   cursor: pointer;
 }
 
+/* Apply the shared brand gradient only to the emphasized part of the product name. */
 .brandName {
   color: var(--color-text-muted);
   font-size: 1.28rem;
@@ -77,6 +79,7 @@
   cursor: default;
 }
 
+/* Constrain the decorative asset so it cannot change the settings target size. */
 .settingsIcon {
   width: 30px;
   height: 30px;

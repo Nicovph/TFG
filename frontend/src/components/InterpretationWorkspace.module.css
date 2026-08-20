@@ -1,11 +1,13 @@
 /* InterpretationWorkspace.module.css styles the interpretation form and result. */
 
+/* Constrain the working area to a readable width while preserving responsive gutters. */
 .workspace {
   width: min(1040px, calc(100% - var(--page-content-gutter)));
   margin: 0 auto;
   padding: 6px 0 72px;
 }
 
+/* Keep the decorative workspace mark at stable dimensions to prevent layout shifts. */
 .workspaceMark {
   display: block;
   width: var(--brand-logo-size);
@@ -14,6 +16,7 @@
   object-fit: contain;
 }
 
+/* Use shared grid primitives for form, context, and result content alignment. */
 .messageForm,
 .inputColumn,
 .inputPanel,
@@ -24,6 +27,7 @@
   display: grid;
 }
 
+/* Apply the larger rhythm between sections and controls. */
 .messageForm,
 .inputColumn,
 .contextFields,
@@ -31,12 +35,14 @@
   gap: var(--space-md);
 }
 
+/* Keep labels and their directly related content visually grouped. */
 .inputPanel,
 .contextField,
 .resultContent section {
   gap: var(--space-xs);
 }
 
+/* Present the currently supported text mode as a stable, non-interactive status pill. */
 .modeControls {
   display: flex;
   flex-wrap: wrap;
@@ -62,6 +68,7 @@
   background: var(--color-action-soft);
 }
 
+/* Keep the typographic mode symbol compact beside its visible label. */
 .textModeIcon {
   font-size: 0.86rem;
   line-height: 1;
@@ -71,6 +78,7 @@
   font-size: 0.62em;
 }
 
+/* Pair input and output on wide screens so users can compare them directly. */
 .workGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -78,12 +86,14 @@
   align-items: start;
 }
 
+/* Apply consistent label emphasis across primary and optional input fields. */
 .inputPanel label,
 .contextField label {
   color: var(--color-text-strong);
   font-weight: 700;
 }
 
+/* Normalize native fields while retaining browser-provided text and selection behavior. */
 .inputPanel textarea,
 .contextField textarea,
 .contextField select {
@@ -96,37 +106,44 @@
   font: inherit;
 }
 
+/* Allow longer messages to expand vertically without changing horizontal layout. */
 .inputPanel textarea,
 .contextField textarea {
   resize: vertical;
   padding: var(--space-md);
 }
 
+/* Reserve enough initial space for the target message to remain easy to review. */
 .inputPanel textarea {
   height: 178px;
   min-height: 150px;
 }
 
+/* Keep optional context compact while still exposing multiple lines. */
 .contextField textarea {
   min-height: 96px;
 }
 
+/* Preserve a full-size native select target and space for its browser indicator. */
 .contextField select {
   min-height: 44px;
   padding: 0 38px 0 12px;
 }
 
+/* A speaker relation is unavailable until its corresponding context has content. */
 .contextField select:disabled {
   cursor: not-allowed;
   opacity: 0.58;
 }
 
+/* Use one muted semantic color for placeholders and the empty-result message. */
 .inputPanel textarea::placeholder,
 .contextField textarea::placeholder,
 .resultPanel > p {
   color: var(--color-text-placeholder);
 }
 
+/* Share an accessible minimum target height across context and submission actions. */
 .contextToggle,
 .submitButton {
   min-height: 44px;
@@ -136,6 +153,7 @@
   cursor: pointer;
 }
 
+/* Distinguish the optional-context action from the primary submission action. */
 .contextToggle {
   width: fit-content;
   padding: 0 16px;
@@ -143,6 +161,7 @@
   color: var(--color-action-contrast);
 }
 
+/* Keep the context action and remaining-character feedback aligned when space permits. */
 .inputActions {
   display: flex;
   flex-wrap: wrap;
@@ -151,6 +170,7 @@
   gap: var(--space-sm);
 }
 
+/* Group optional messages and their speaker relations as one semantic fieldset. */
 .contextFields {
   min-width: 0;
   margin: 0;
@@ -159,12 +179,14 @@
   border-radius: var(--radius-medium);
 }
 
+/* Keep the native legend visually connected to the outlined fieldset. */
 .contextFields legend {
   padding: 0 var(--space-xs);
   color: var(--color-text-strong);
   font-weight: 800;
 }
 
+/* Let grid gaps control vertical rhythm instead of browser-default block margins. */
 .contextFields > p,
 .characterCount,
 .submissionStatus,
@@ -174,20 +196,24 @@
   margin: 0;
 }
 
+/* Render context guidance and remaining capacity as secondary supporting information. */
 .contextFields > p,
 .characterCount {
   color: var(--color-text-copy);
   font-size: 0.9rem;
 }
 
+/* Align the character counter with the trailing edge of its associated textarea. */
 .characterCount {
   text-align: end;
 }
 
+/* Explain temporary preference-related submission blocks without presenting an error. */
 .submissionStatus {
   color: var(--color-text-copy);
 }
 
+/* Reserve a stable output surface for empty, loading, error, and successful states. */
 .resultPanel {
   width: 100%;
   min-height: 178px;
@@ -197,6 +223,7 @@
   background: var(--color-support-soft);
 }
 
+/* Maintain a clear heading hierarchy within dynamically inserted results. */
 .resultContent h2,
 .resultContent h3 {
   margin: 0;
@@ -211,14 +238,17 @@
   font-size: 1.05rem;
 }
 
+/* Preserve native list semantics while aligning signal text with result copy. */
 .resultContent ul {
   padding-left: 22px;
 }
 
+/* Separate adjacent signals without adding spacing before the first item. */
 .resultContent li + li {
   margin-top: var(--space-xs);
 }
 
+/* Combine text, symbols, and contrast so sensitive-content feedback is not color-only. */
 .contentWarning {
   display: flex;
   align-items: center;
@@ -233,11 +263,13 @@
   font-weight: 800;
 }
 
+/* Keep decorative warning symbols fixed while explanatory text is allowed to wrap. */
 .contentWarning > span[aria-hidden='true'] {
   flex: 0 0 auto;
   font-size: 1.4rem;
 }
 
+/* Size the primary action from its label while retaining a predictable minimum width. */
 .submitButton {
   width: fit-content;
   min-width: 110px;
@@ -246,6 +278,7 @@
   color: var(--color-text-on-accent);
 }
 
+/* Communicate blocked submissions without removing the control from the interface. */
 .submitButton:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -262,6 +295,7 @@
   box-shadow: var(--shadow-modal);
 }
 
+/* Dim the application beneath the external-processing confirmation dialog. */
 .processingDialog::backdrop {
   background: var(--color-overlay);
 }
@@ -271,6 +305,7 @@
   color: var(--color-text-strong);
 }
 
+/* Keep confirmation actions at the trailing edge and allow localized labels to wrap. */
 .processingActions {
   display: flex;
   flex-wrap: wrap;
@@ -279,6 +314,7 @@
   margin-top: var(--space-lg);
 }
 
+/* Give both modal decisions equal target height and typographic emphasis. */
 .cancelProcessingButton,
 .confirmProcessingButton {
   min-height: 44px;
@@ -288,6 +324,7 @@
   cursor: pointer;
 }
 
+/* Visually separate cancellation from the filled confirmation action. */
 .cancelProcessingButton {
   border: var(--border-width-thin) solid var(--color-action-primary);
   background: var(--color-surface);
@@ -300,6 +337,7 @@
   color: var(--color-text-on-accent);
 }
 
+/* Apply one visible keyboard-focus treatment to every workspace control and focus target. */
 .inputPanel textarea:focus-visible,
 .contextField textarea:focus-visible,
 .contextField select:focus-visible,
@@ -312,6 +350,7 @@
   outline-offset: var(--focus-outline-offset);
 }
 
+/* Collapse the comparison layout and reduce fixed media sizes on narrow screens. */
 @media (max-width: 760px) {
   .workspace {
     width: calc(100% - 40px);

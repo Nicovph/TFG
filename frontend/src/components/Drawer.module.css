@@ -38,6 +38,7 @@
   gap: 20px;
 }
 
+/* Keep the drawer brand compact while preserving the shared gradient identity. */
 .drawerBrand {
   margin: 0;
   color: var(--color-text-muted);
@@ -106,6 +107,7 @@
   cursor: pointer;
 }
 
+/* Separate the primary workspace destination from secondary information pages. */
 .drawerNav .primaryNavItem {
   min-height: 58px;
   margin-bottom: var(--space-md);

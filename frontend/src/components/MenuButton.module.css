@@ -43,6 +43,7 @@
   top: 7px;
 }
 
+/* Preserve a visible keyboard-focus indicator around the complete menu target. */
 .button:focus-visible {
   outline: var(--focus-outline);
   outline-offset: var(--focus-outline-offset);

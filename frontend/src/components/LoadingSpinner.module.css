@@ -7,7 +7,7 @@
   animation: spin 900ms linear infinite;
 }
 
-/* For secondary actions. */
+/* The compact variant fits inline secondary actions without shifting their labels. */
 .compact {
   width: 16px;
   height: 16px;
@@ -15,7 +15,7 @@
   border-top-color: var(--color-action-contrast);
 }
 
-/* For primary actions. */
+/* The status variant provides a prominent progress cue for full-page states. */
 .status {
   width: 66px;
   height: 66px;

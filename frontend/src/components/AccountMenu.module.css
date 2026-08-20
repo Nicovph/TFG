@@ -54,6 +54,7 @@
   cursor: pointer;
 }
 
+/* Keep the logout action visible while communicating an in-progress request. */
 .accountPanel button:disabled {
   cursor: wait;
   opacity: 0.75;

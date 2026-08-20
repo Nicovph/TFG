@@ -17,6 +17,7 @@
   gap: var(--space-lg);
 }
 
+/* Keep the back control and its label as one compact navigation group. */
 .infoNavigation {
   display: inline-flex;
   align-items: center;
@@ -101,6 +102,7 @@
   line-height: 1.05;
 }
 
+/* Use bounded line length and desktop justification for sustained reading. */
 .infoArticle p {
   max-width: 68ch;
   margin: 0 0 var(--space-md);

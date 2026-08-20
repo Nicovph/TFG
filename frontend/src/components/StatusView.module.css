@@ -134,6 +134,7 @@
   color: var(--color-support-strong);
 }
 
+/* Preserve visible keyboard focus across both recovery-action priorities. */
 .primaryAction:focus-visible,
 .secondaryAction:focus-visible {
   outline: var(--focus-outline);
