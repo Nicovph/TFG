@@ -90,6 +90,8 @@ services:
     environment:
       DJANGO_DB_PROFILE: app
       DJANGO_DB_APP_CREDENTIALS_FILE: /run/secrets/db_app_config
+      # Load Django's signing key from a read-only Docker secret.
+      DJANGO_SECRET_KEY_FILE: /run/secrets/django_secret_key
       # The integrated Compose stack has an explicit React origin, so require its
       # post-callback URL instead of relying on Django's standalone same-origin fallback.
       FRONTEND_AUTH_RETURN_URL: ${FRONTEND_AUTH_RETURN_URL:?Set FRONTEND_AUTH_RETURN_URL in .env}
@@ -147,6 +149,9 @@ services:
     secrets:
       - source: db_app_config
         target: db_app_config
+
+      - source: django_secret_key
+        target: django_secret_key
 
       - source: google_oidc_client_secret
         target: google_oidc_client_secret
@@ -366,6 +371,12 @@ secrets:
 
   db_test_config:
     file: ./.secrets/db-test.env
+
+  # Stable application-only key used by Django for signing sessions and other
+  # protected values. Offline migration and test tasks generate ephemeral keys
+  # instead, preserving least privilege.
+  django_secret_key:
+    file: ./.secrets/django-secret-key.txt
 
   google_oidc_client_secret:
     file: ./.secrets/google-oidc-client-secret.txt

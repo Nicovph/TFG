@@ -10,9 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-from pathlib import Path
 import os
+import secrets
 from collections.abc import Mapping
+from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import dotenv_values
@@ -61,8 +62,8 @@ def get_database_credentials_file(
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-y=j0#1e20l)f(%69arj=(zw*ivg70#ni*jn!bghmgh4rpcd=n='
+# SECRET_KEY is loaded from backend-only configuration after the common and
+# profile-specific settings have been resolved below.
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -286,14 +287,21 @@ aplication_config: Mapping[str, str] = { # Mapping of str key to str value.
 }
 
 
-def get_secret_setting(name: str, file_name: str) -> str:
+def get_secret_setting(
+    name: str,
+    file_name: str,
+    *,
+    default_file: Path | None = None,
+) -> str:
     """Load an optional secret from direct configuration or an absolute file
-    (GOOGLE_OIDC_CLIENT_SECRET=secret-value or 
+    (GOOGLE_OIDC_CLIENT_SECRET=secret-value or
     GOOGLE_OIDC_CLIENT_SECRET_FILE=/run/secrets/google_oidc_client_secret).
 
     Args:
         name: The direct configuration key used outside containerized runtime.
         file_name: The configuration key containing an absolute secret file path.
+        default_file: Optional local secret file used only when neither explicit
+            source is configured.
 
     Raises:
         ImproperlyConfigured: If both sources are configured, the file path is
@@ -325,13 +333,24 @@ def get_secret_setting(name: str, file_name: str) -> str:
 
         return direct_value
 
-    # If neither name nor file_name exists.
+    # If neither explicit source exists, use the optional local-only default.
     if not configured_file:
-        return ""
+        if default_file is None:
+            return ""
 
-    secret_path = Path(configured_file)
+        if not default_file.is_absolute():
+            raise ImproperlyConfigured(
+                "La ruta predeterminada del secreto debe ser absoluta."
+            )
 
-    if not secret_path.is_absolute():
+        if not default_file.is_file():
+            return ""
+
+        secret_path = default_file
+    else:
+        secret_path = Path(configured_file)
+
+    if configured_file and not secret_path.is_absolute():
         raise ImproperlyConfigured(f"{file_name} debe ser una ruta absoluta.")
 
     try:
@@ -370,6 +389,67 @@ def get_secret_setting(name: str, file_name: str) -> str:
         )
 
     return secret_value
+
+
+EPHEMERAL_SECRET_KEY_PROFILES = frozenset({"migrate", "test"})
+
+
+def get_django_secret_key(
+    *,
+    local_secret_file: Path | None = None,
+) -> str:
+    """Load the runtime Django signing key or create an offline-only key.
+
+    The HTTP application must receive a stable external secret. Migration and
+    test processes instead receive an independent ephemeral key so the runtime
+    secret is not distributed to tasks that do not serve authenticated traffic.
+
+    Args:
+        local_secret_file: Optional local file override used by focused tests.
+
+    Raises:
+        ImproperlyConfigured: If the application profile has no configured key,
+            or if a configured key does not meet Django's strength guidance.
+
+    Returns:
+        A strong key suitable for Django cryptographic signing in this process.
+    """
+    default_file = local_secret_file or (
+        BASE_DIR / ".secrets" / "django-secret-key.txt"
+    )
+    secret_key = get_secret_setting(
+        "DJANGO_SECRET_KEY",
+        "DJANGO_SECRET_KEY_FILE",
+        default_file=default_file,
+    )
+
+    if not secret_key and DATABASE_PROFILE in EPHEMERAL_SECRET_KEY_PROFILES:
+        # Offline tasks do not need signatures to remain valid after exit.
+        secret_key = secrets.token_urlsafe(64)
+
+    if not secret_key:
+        raise ImproperlyConfigured(
+            "Debe configurarse DJANGO_SECRET_KEY o DJANGO_SECRET_KEY_FILE "
+            "para el perfil de ejecución de la aplicación."
+        )
+
+    if (
+        len(secret_key) < 50
+        or len(set(secret_key)) < 5
+        or secret_key.startswith("django-insecure-")
+    ):
+        raise ImproperlyConfigured(
+            "La clave secreta de Django debe tener al menos 50 caracteres, "
+            "contener al menos 5 caracteres distintos y no usar el prefijo "
+            "django-insecure-."
+        )
+
+    return secret_key
+
+
+# Django uses this value for session integrity, password reset tokens, messages,
+# and every signing operation that does not provide a separate key.
+SECRET_KEY = get_django_secret_key()
 
 
 def get_required_setting(name: str) -> str:

@@ -1,4 +1,4 @@
-"""Tests for secure Google OIDC secret loading in project settings."""
+"""Tests for secure backend secret loading in project settings."""
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -52,6 +52,25 @@ class SecretSettingTests(SimpleTestCase):
                 )
 
         self.assertEqual(value, "file-secret")
+
+    def test_reads_secret_from_local_default_file(self) -> None:
+        """Use the ignored local file when no explicit source is configured.
+
+        Args:
+            self: The test case instance.
+        """
+        with TemporaryDirectory() as temporary_directory:
+            secret_path = Path(temporary_directory) / "local-secret.txt"
+            secret_path.write_text("local-file-secret\n", encoding="utf-8")
+
+            with mock.patch.object(project_settings, "aplication_config", {}):
+                value = project_settings.get_secret_setting(
+                    "DJANGO_SECRET_KEY",
+                    "DJANGO_SECRET_KEY_FILE",
+                    default_file=secret_path,
+                )
+
+        self.assertEqual(value, "local-file-secret")
 
     def test_rejects_invalid_direct_secret(self) -> None:
         """Reject a direct secret containing control characters.
@@ -137,3 +156,124 @@ class SecretSettingTests(SimpleTestCase):
                                 "GOOGLE_OIDC_CLIENT_SECRET",
                                 "GOOGLE_OIDC_CLIENT_SECRET_FILE",
                             )
+
+
+class DjangoSecretKeyTests(SimpleTestCase):
+    """Validate role-aware Django signing-key configuration."""
+
+    def test_application_profile_accepts_strong_external_key(self) -> None:
+        """Use a strong explicitly configured key for the HTTP application.
+
+        Args:
+            self: The test case instance.
+        """
+        configured_key = "test-only-application-key-" + ("a1B2" * 16)
+
+        with (
+            mock.patch.object(
+                project_settings,
+                "aplication_config",
+                {"DJANGO_SECRET_KEY": configured_key},
+            ),
+            mock.patch.object(
+                project_settings,
+                "DATABASE_PROFILE",
+                "app",
+            ),
+        ):
+            value = project_settings.get_django_secret_key()
+
+        self.assertEqual(value, configured_key)
+
+    def test_application_profile_rejects_missing_secret_key(self) -> None:
+        """Fail startup when the HTTP application has no stable signing key.
+
+        Args:
+            self: The test case instance.
+        """
+        with TemporaryDirectory() as temporary_directory:
+            missing_path = Path(temporary_directory) / "missing-secret.txt"
+
+            with (
+                mock.patch.object(project_settings, "aplication_config", {}),
+                mock.patch.object(
+                    project_settings,
+                    "DATABASE_PROFILE",
+                    "app",
+                ),
+                self.assertRaisesRegex(
+                    ImproperlyConfigured,
+                    "DJANGO_SECRET_KEY",
+                ),
+            ):
+                project_settings.get_django_secret_key(
+                    local_secret_file=missing_path,
+                )
+
+    def test_offline_profiles_generate_independent_ephemeral_key(self) -> None:
+        """Avoid distributing the stable application key to offline tasks.
+
+        Args:
+            self: The test case instance.
+        """
+        ephemeral_key = "test-only-ephemeral-key-" + ("a1B2" * 16)
+
+        with TemporaryDirectory() as temporary_directory:
+            missing_path = Path(temporary_directory) / "missing-secret.txt"
+
+            with mock.patch.object(
+                project_settings.secrets,
+                "token_urlsafe",
+                return_value=ephemeral_key,
+            ) as generate_key:
+                for profile_name in ("migrate", "test"):
+                    with (
+                        self.subTest(profile=profile_name),
+                        mock.patch.object(
+                            project_settings,
+                            "aplication_config",
+                            {},
+                        ),
+                        mock.patch.object(
+                            project_settings,
+                            "DATABASE_PROFILE",
+                            profile_name,
+                        ),
+                    ):
+                        value = project_settings.get_django_secret_key(
+                            local_secret_file=missing_path,
+                        )
+                        self.assertEqual(value, ephemeral_key)
+
+        self.assertEqual(generate_key.call_count, 2)
+        # Verify that the last call was made with the argument 64 (secrets.urlsafe(64)).
+        generate_key.assert_called_with(64)
+
+    def test_rejects_weak_configured_secret_key(self) -> None:
+        """Reject known development-style keys before Django starts.
+
+        Args:
+            self: The test case instance.
+        """
+        with TemporaryDirectory() as temporary_directory:
+            missing_path = Path(temporary_directory) / "missing-secret.txt"
+
+            with (
+                mock.patch.object(
+                    project_settings,
+                    "aplication_config",
+                    {"DJANGO_SECRET_KEY": "django-insecure-" + ("x" * 64)},
+                ),
+                mock.patch.object(
+                    project_settings,
+                    "DATABASE_PROFILE",
+                    "app",
+                ),
+                self.assertRaisesRegex(
+                    ImproperlyConfigured,
+                    "django-insecure-",
+                ),
+            ):
+                project_settings.get_django_secret_key(
+                    local_secret_file=missing_path,
+                )
