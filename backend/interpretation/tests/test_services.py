@@ -533,7 +533,7 @@ class InterpretationServiceTests(TestCase):
                 target_message="Mensaje disponible aunque falle la caché.",
             )
 
-        self.assertEqual(result.output.kind, "pragmatic_interpretation")
+        self.assertIsInstance(result.output, LLMInterpretationOutput)
         quota_mock.assert_called_once_with(user_id=self.user.id)
         duplicate_cache.touch.assert_not_called()
         rendered_logs = " ".join(captured.output)
@@ -591,7 +591,7 @@ class InterpretationServiceTests(TestCase):
                 include_visual_support=True,
             )
 
-        self.assertEqual(result.output.kind, "pragmatic_interpretation")
+        self.assertIsInstance(result.output, LLMInterpretationOutput)
         duplicate_cache.add.assert_called_once_with(
             ANY,
             True,
@@ -773,5 +773,5 @@ class InterpretationTransactionBoundaryTests(TransactionTestCase):
             target_message="Cierra la ventana",
         )
 
-        self.assertEqual(result.output.kind, "pragmatic_interpretation")
+        self.assertIsInstance(result.output, LLMInterpretationOutput)
         provider_mock.assert_called_once()

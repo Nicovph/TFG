@@ -60,7 +60,6 @@ export interface VisualSupportResult {
 }
 
 export interface Interpretation {
-  kind: 'pragmatic_interpretation'
   interpretation: string
   clearReformulation: string
   needsMoreContext: boolean

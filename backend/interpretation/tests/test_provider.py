@@ -200,7 +200,10 @@ class GroqProviderTests(SimpleTestCase):
                     client_factory=lambda: self.client,
                 )
 
-                self.assertEqual(result.kind, "pragmatic_interpretation")
+                self.assertEqual(
+                    result.interpretation,
+                    valid_output_payload()["interpretation"],
+                )
                 arguments = self.create.call_args.kwargs
                 self.assertEqual(arguments["model"], model)
                 self.assertTrue(

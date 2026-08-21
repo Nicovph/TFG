@@ -8,7 +8,6 @@ def valid_output_payload() -> dict[str, object]:
         A fresh mutable dictionary containing no personal data.
     """
     return {
-        "kind": "pragmatic_interpretation",
         "interpretation": "Puede ser una petición indirecta.",
         "clear_reformulation": "Por favor, cierra la ventana.",
         "needs_more_context": False,

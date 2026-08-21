@@ -56,12 +56,14 @@ Semántica de la respuesta:
   natural de expresar la lectura pragmática principal. Representa una posibilidad, no la intención
   cierta del autor. Escribe solo la formulación propuesta, sin añadir por tu propia incertidumbre
   expresiones como "parece", "probablemente" o "quiere decir"; expresa la incertidumbre en `interpretation`,
-  `needs_more_context` y `context_note`. Cuando exista ironía, lenguaje indirecto, lenguaje figurado
-  o una implicación respaldada por el contexto, haz explícito ese significado. No te limites a
-  sustituir palabras por sinónimos. Conserva el hablante, destinatario, tiempo, negación y grado de
-  certeza, sin añadir información no respaldada. Si el mensaje es literal, puede mantenerse igual o
-  simplificarse mínimamente. Si no existe una lectura principal suficientemente respaldada,
-  reformula solo el contenido explícito e indica que falta contexto en los campos correspondientes.
+  `needs_more_context` y `context_note`. En `clear_reformulation`, explicita la ironía, el lenguaje
+  indirecto o figurado y las implicaciones respaldadas. Antes de devolver el JSON, identifica
+  internamente todas las frases hechas y expresiones no literales de `target_message`, sustituye cada
+  una por su sentido directo y comprueba que no quede ninguna. Devuelve solo la reformulación final,
+  no ese análisis. Conserva el hablante, destinatario, tiempo, negación y grado de certeza, sin añadir
+  información no respaldada. Si el mensaje es literal, puede mantenerse igual o simplificarse
+  mínimamente. Si no existe una lectura principal suficientemente respaldada, reformula solo el
+  contenido explícito e indica que falta contexto en los campos correspondientes.
 - `needs_more_context`: indica si falta información para una interpretación fiable.
 - `context_note`: describe únicamente qué contexto falta y queda vacío si no falta contexto.
 - `signals`: incluye solo señales respaldadas por el mensaje objetivo y sin tipos duplicados.
@@ -177,7 +179,6 @@ FEW_SHOT_MESSAGES: Final[tuple[ChatMessage, ...]] = (
         "role": "assistant",
         "content": _serialize_prompt_payload(
             {
-                "kind": "pragmatic_interpretation",
                 "interpretation": (
                     "Parece una afirmación literal sobre la hora de inicio "
                     "de una reunión."
@@ -200,7 +201,6 @@ FEW_SHOT_MESSAGES: Final[tuple[ChatMessage, ...]] = (
         "role": "assistant",
         "content": _serialize_prompt_payload(
             {
-                "kind": "pragmatic_interpretation",
                 "interpretation": (
                     "Puede ser irónico: la palabra 'puntual' contrasta con "
                     "llegar tarde. Sin tono o contexto no puede afirmarse "
@@ -245,7 +245,6 @@ FEW_SHOT_MESSAGES: Final[tuple[ChatMessage, ...]] = (
         "role": "assistant",
         "content": _serialize_prompt_payload(
             {
-                "kind": "pragmatic_interpretation",
                 "interpretation": (
                     "La persona que escribió el mensaje objetivo parece "
                     "rechazar indirectamente la invitación porque debe "

@@ -121,9 +121,6 @@ class LLMInterpretationOutput(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    kind: Literal["pragmatic_interpretation"] = Field(
-        description="Discriminador fijo del contrato de interpretación."
-    )
     interpretation: Annotated[
         StrictText,
         StringConstraints(
@@ -143,9 +140,9 @@ class LLMInterpretationOutput(BaseModel):
         Field(
             description=(
                 "Posible forma explícita, directa y natural de expresar la lectura "
-                "pragmática principal, sin presentarla como una intención cierta ni "
-                "añadir información no respaldada. Si el mensaje es literal, puede "
-                "mantenerse igual."
+                "pragmática principal. Sustituye todas las frases hechas por su sentido "
+                "directo, sin presentarla como una intención cierta ni añadir información "
+                "no respaldada. Si el mensaje es literal, puede mantenerse igual."
             )
         ),
     ]

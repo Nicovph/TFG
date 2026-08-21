@@ -656,7 +656,6 @@ function parseInterpretation(
   includeVisualSupport: boolean,
 ): Interpretation {
   const expectedKeys = [
-    'kind',
     'interpretation',
     'clear_reformulation',
     'needs_more_context',
@@ -674,7 +673,6 @@ function parseInterpretation(
       (includeVisualSupport &&
         hasExactKeys(payload, [...expectedKeys, 'visual_support']))
     ) ||
-    payload.kind !== 'pragmatic_interpretation' ||
     typeof payload.interpretation !== 'string' ||
     typeof payload.clear_reformulation !== 'string' ||
     typeof payload.needs_more_context !== 'boolean' ||
@@ -727,7 +725,6 @@ function parseInterpretation(
   }
 
   return {
-    kind: payload.kind,
     interpretation: payload.interpretation,
     clearReformulation: payload.clear_reformulation,
     needsMoreContext: payload.needs_more_context,

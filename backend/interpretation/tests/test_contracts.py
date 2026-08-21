@@ -45,6 +45,7 @@ class StructuredOutputContractTests(SimpleTestCase):
 
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual(set(schema["required"]), set(schema["properties"]))
+        self.assertNotIn("kind", schema["properties"])
         signal_schema = schema["$defs"]["PragmaticSignal"]
         self.assertFalse(signal_schema["additionalProperties"])
         self.assertEqual(
@@ -61,6 +62,10 @@ class StructuredOutputContractTests(SimpleTestCase):
         )
         self.assertIn(
             "intención cierta",
+            schema["properties"]["clear_reformulation"]["description"],
+        )
+        self.assertIn(
+            "frases hechas por su sentido directo",
             schema["properties"]["clear_reformulation"]["description"],
         )
         self.assertIn(

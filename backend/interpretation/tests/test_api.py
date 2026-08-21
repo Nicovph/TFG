@@ -140,7 +140,6 @@ class InterpretationApiTests(TestCase):
         self.assertEqual(
             set(response.data),
             {
-                "kind",
                 "interpretation",
                 "clear_reformulation",
                 "needs_more_context",
@@ -190,7 +189,6 @@ class InterpretationApiTests(TestCase):
         self.assertEqual(
             set(response.data),
             {
-                "kind",
                 "interpretation",
                 "clear_reformulation",
                 "needs_more_context",
