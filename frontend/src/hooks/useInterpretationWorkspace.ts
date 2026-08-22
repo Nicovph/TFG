@@ -11,6 +11,7 @@ import type {
   Interpretation,
   InterpretationRequest,
 } from '../types'
+import { formatRetryAfter } from '../utils/formatRetryAfter'
 
 // This fixed product contract mirrors Django's combined input limit.
 export const MAX_INTERPRETATION_INPUT_LENGTH = 500
@@ -113,25 +114,6 @@ function truncateToCodePointLimit(
   }
 
   return result
-}
-
-/**
- * Format a Retry-After duration using one easily understood unit.
- *
- * Args:
- *   seconds: Positive delay supplied by the internal Django API.
- *
- * Returns:
- *   A rounded duration in seconds, minutes, or hours.
- */
-function formatRetryAfter(seconds: number): string {
-  if (seconds < 60) return `${seconds} ${seconds === 1 ? 'segundo' : 'segundos'}`
-
-  const minutes = Math.ceil(seconds / 60)
-  if (minutes < 60) return `${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}`
-
-  const hours = Math.ceil(minutes / 60)
-  return `${hours} ${hours === 1 ? 'hora' : 'horas'}`
 }
 
 /**
@@ -335,9 +317,11 @@ export function useInterpretationWorkspace(): InterpretationWorkspaceHookResult 
       }
 
       setErrorTitle(
-        error instanceof ApiError && error.apiCode === 'offensive_language_hidden'
-          ? 'No se pudo mostrar la interpretación'
-          : 'No se pudo interpretar el mensaje',
+        error instanceof ApiError && error.status === 429
+          ? 'Espera antes de volver a intentarlo'
+          : error instanceof ApiError && error.apiCode === 'offensive_language_hidden'
+            ? 'No se pudo mostrar la interpretación'
+            : 'No se pudo interpretar el mensaje',
       )
       setErrorMessage(getInterpretationErrorMessage(error))
       setInterpretationStatus('error')

@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from ..models import CustomUser
 from backend.audit.models import SecurityEvent, SecurityEventType
+from ..services import GoogleOIDCConfigurationError
 from ..services.flow_state import _state_cache_key as state_cache_key_for_testing
 from .helpers import fake_jwt, valid_claims
 
@@ -228,6 +229,49 @@ class GoogleOIDCFlowTests(TestCase):
         response = self.client.get(reverse("google-login-start"))
 
         self._assert_frontend_redirect(response, authentication_failed=True)
+
+    @override_settings(DEBUG=False, FRONTEND_AUTH_RETURN_URL="")
+    def test_production_requires_explicit_frontend_return_url(self) -> None:
+        """Reject an implicit same-origin return URL outside development.
+
+        Args:
+            self: The test case instance.
+        """
+        with mock.patch(
+            "backend.accounts.views.create_google_authorization_url",
+            side_effect=GoogleOIDCConfigurationError("synthetic configuration failure"),
+        ):
+            response = self.client.get(reverse("google-login-start"), secure=True)
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"error": "authentication_unavailable"})
+
+    @override_settings(DEBUG=False)
+    def test_frontend_return_url_rejects_embedded_credentials(self) -> None:
+        """Reject configured return URLs containing user information.
+
+        Args:
+            self: The test case instance.
+        """
+        for return_url in (
+            "https://user@testserver/",
+            "https://user:password@testserver/",
+        ):
+            with self.subTest(return_url=return_url), self.settings(
+                FRONTEND_AUTH_RETURN_URL=return_url,
+            ), mock.patch(
+                "backend.accounts.views.create_google_authorization_url",
+                side_effect=GoogleOIDCConfigurationError(
+                    "synthetic configuration failure"
+                ),
+            ):
+                response = self.client.get(reverse("google-login-start"))
+
+            self.assertEqual(response.status_code, 503)
+            self.assertEqual(
+                response.json(),
+                {"error": "authentication_unavailable"},
+            )
 
     def test_callback_authenticates_new_user_rotates_session_and_consumes_flow(self) -> None:
         """Authenticate a new user only after state and ID token validation.

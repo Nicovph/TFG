@@ -95,9 +95,12 @@ services:
       # The integrated Compose stack has an explicit React origin, so require its
       # post-callback URL instead of relying on Django's standalone same-origin fallback.
       FRONTEND_AUTH_RETURN_URL: ${FRONTEND_AUTH_RETURN_URL:?Set FRONTEND_AUTH_RETURN_URL in .env}
+      PREFERENCES_UPDATE_ATTEMPTS_PER_MINUTE: ${PREFERENCES_UPDATE_ATTEMPTS_PER_MINUTE:-}
+      PREFERENCES_UPDATE_ATTEMPTS_PER_DAY: ${PREFERENCES_UPDATE_ATTEMPTS_PER_DAY:-}
       GOOGLE_OIDC_CLIENT_ID: ${GOOGLE_OIDC_CLIENT_ID:?Set GOOGLE_OIDC_CLIENT_ID in .env}
       GOOGLE_OIDC_CLIENT_SECRET_FILE: /run/secrets/google_oidc_client_secret
       GOOGLE_OIDC_REDIRECT_URI: ${GOOGLE_OIDC_REDIRECT_URI:?Set GOOGLE_OIDC_REDIRECT_URI in .env}
+      GOOGLE_OIDC_LOGIN_ATTEMPTS_PER_MINUTE: ${GOOGLE_OIDC_LOGIN_ATTEMPTS_PER_MINUTE:-}
       GROQ_API_KEY_FILE: /run/secrets/groq_api_key
       INTERPRETATION_HMAC_KEY_FILE: /run/secrets/interpretation_hmac_key
       GROQ_MODEL: ${GROQ_MODEL:-}

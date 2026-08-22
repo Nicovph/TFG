@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getUserPreferences, updateUserPreference } from '../api'
+import { ApiError, getUserPreferences, updateUserPreference } from '../api'
 import {
   DEFAULT_PREFERENCES,
   type PreferenceChangeHandler,
@@ -19,9 +19,11 @@ export type PreferenceRequestStatus =
   | 'saving'
   | 'load-error'
   | 'save-error'
+  | 'rate-limited'
 
 interface UserPreferencesHookResult {
   preferences: PreferenceState
+  preferenceRetryAfterSeconds: number | null
   preferenceStatus: PreferenceRequestStatus
   resetPreferences: () => void
   retryPreferences: () => void
@@ -41,8 +43,27 @@ export function useUserPreferences(authStatus: AuthStatus): UserPreferencesHookR
   const [preferences, setPreferences] = useState<PreferenceState>(DEFAULT_PREFERENCES)
   const [preferenceStatus, setPreferenceStatus] =
     useState<PreferenceRequestStatus>('idle')
+  const [preferenceRetryAfterSeconds, setPreferenceRetryAfterSeconds] =
+    useState<number | null>(null)
   const [loadAttempt, setLoadAttempt] = useState(0)
   const activeRequestRef = useRef<AbortController | null>(null)
+
+  // Re-enable confirmed local preferences when Django's retry window expires.
+  useEffect(() => {
+    // Nothing to schedule unless we are currently rate-limited.
+    if (preferenceStatus !== 'rate-limited' || preferenceRetryAfterSeconds === null) {
+      return
+    }
+
+    // Resume normal preference updates after Retry-After seconds.
+    const timeoutId = window.setTimeout(() => {
+      setPreferenceRetryAfterSeconds(null)
+      setPreferenceStatus('ready')
+    }, preferenceRetryAfterSeconds * 1000)
+
+    // Clear the timer on unmount or dependency change.
+    return () => window.clearTimeout(timeoutId)
+  }, [preferenceRetryAfterSeconds, preferenceStatus])
 
   useEffect(() => {
     activeRequestRef.current?.abort()
@@ -62,6 +83,7 @@ export function useUserPreferences(authStatus: AuthStatus): UserPreferencesHookR
         }
 
         setPreferences(loadedPreferences)
+        setPreferenceRetryAfterSeconds(null)
         setPreferenceStatus('ready')
       })
       .catch(() => {
@@ -87,9 +109,12 @@ export function useUserPreferences(authStatus: AuthStatus): UserPreferencesHookR
    *   Nothing.
    */
   const retryPreferences = useCallback(() => {
+    if (preferenceStatus === 'rate-limited') return
+
+    setPreferenceRetryAfterSeconds(null)
     setPreferenceStatus('loading')
     setLoadAttempt((currentAttempt) => currentAttempt + 1)
-  }, [])
+  }, [preferenceStatus])
 
   /**
    * Remove the previous session's preference values from local React state.
@@ -101,6 +126,7 @@ export function useUserPreferences(authStatus: AuthStatus): UserPreferencesHookR
     activeRequestRef.current?.abort()
     activeRequestRef.current = null
     setPreferences(DEFAULT_PREFERENCES)
+    setPreferenceRetryAfterSeconds(null)
     setPreferenceStatus('idle')
   }, [])
 
@@ -116,10 +142,7 @@ export function useUserPreferences(authStatus: AuthStatus): UserPreferencesHookR
    */
   const updatePreference: PreferenceChangeHandler = useCallback(
     (key, value) => {
-      if (
-        authStatus !== 'authenticated' ||
-        (preferenceStatus !== 'ready' && preferenceStatus !== 'save-error')
-      ) {
+      if (authStatus !== 'authenticated' || preferenceStatus !== 'ready') {
         return
       }
 
@@ -138,6 +161,7 @@ export function useUserPreferences(authStatus: AuthStatus): UserPreferencesHookR
       activeRequestRef.current?.abort()
       activeRequestRef.current = controller
       setPreferences(nextPreferences)
+      setPreferenceRetryAfterSeconds(null)
       setPreferenceStatus('saving')
 
       updateUserPreference(key, value, controller.signal)
@@ -149,13 +173,18 @@ export function useUserPreferences(authStatus: AuthStatus): UserPreferencesHookR
           setPreferences(savedPreferences)
           setPreferenceStatus('ready')
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (controller.signal.aborted) {
             return
           }
 
           setPreferences(previousPreferences)
-          setPreferenceStatus('save-error')
+          const rateLimited = error instanceof ApiError && error.status === 429
+          setPreferenceRetryAfterSeconds(
+            // The fallback prevents an indefinite lock if an intermediary drops Retry-After.
+            rateLimited ? (error.retryAfterSeconds ?? 60) : null,
+          )
+          setPreferenceStatus(rateLimited ? 'rate-limited' : 'save-error')
         })
         .finally(() => {
           if (activeRequestRef.current === controller) {
@@ -168,6 +197,7 @@ export function useUserPreferences(authStatus: AuthStatus): UserPreferencesHookR
 
   return {
     preferences: authStatus === 'authenticated' ? preferences : DEFAULT_PREFERENCES,
+    preferenceRetryAfterSeconds,
     preferenceStatus:
       authStatus === 'authenticated'
         ? preferenceStatus === 'idle'

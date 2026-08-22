@@ -1,6 +1,6 @@
 /**
  * useAuthFlowError.ts manages the non-sensitive, tab-scoped marker used to
- * distinguish a failed user-initiated Google login from an arbitrary URL hash.
+ * distinguish backend authentication statuses from arbitrary URL hashes.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -17,9 +17,12 @@ import {
  */
 const AUTH_ATTEMPT_STORAGE_KEY = 'teaslator.authAttemptPending'
 const AUTH_ERROR_FRAGMENT = '#auth-error'
+const AUTH_RATE_LIMITED_FRAGMENT = '#auth-rate-limited'
+
+type AuthFlowError = 'authentication-failed' | 'rate-limited' | null
 
 interface AuthFlowErrorHookResult {
-  authFlowError: boolean
+  authFlowError: AuthFlowError
   beginAuthAttempt: () => void
   clearAuthFlowState: () => void
 }
@@ -28,29 +31,36 @@ interface AuthFlowErrorHookResult {
  * Check for an authentication error produced by a user-initiated flow.
  *
  * Returns:
- *   True only when both the URL error fragment and the current-tab attempt
- *   marker are present.
+ *   The recognized error kind only when both its URL fragment and the
+ *   current-tab attempt marker are present; otherwise null.
  */
-function readAuthFlowError(): boolean {
+function readAuthFlowError(): AuthFlowError {
   if (typeof window === 'undefined') {
-    return false
+    return null
   }
 
-  // Requiring both markers prevents an arbitrary or stale hash from showing an error.
-  return (
-    window.location.hash === AUTH_ERROR_FRAGMENT &&
-    readSessionStorage(AUTH_ATTEMPT_STORAGE_KEY) === 'true'
-  )
+  if (readSessionStorage(AUTH_ATTEMPT_STORAGE_KEY) !== 'true') {
+    return null
+  }
+
+  if (window.location.hash === AUTH_ERROR_FRAGMENT) return 'authentication-failed'
+  if (window.location.hash === AUTH_RATE_LIMITED_FRAGMENT) return 'rate-limited'
+
+  return null
 }
 
 /**
- * Remove the generic authentication error fragment without reloading the page.
+ * Remove a recognized authentication status fragment without reloading the page.
  *
  * Returns:
  *   Nothing. URL cleanup is optional and failures leave the interface usable.
  */
 function clearAuthErrorFragment(): void {
-  if (typeof window === 'undefined' || window.location.hash !== AUTH_ERROR_FRAGMENT) {
+  if (
+    typeof window === 'undefined' ||
+    (window.location.hash !== AUTH_ERROR_FRAGMENT &&
+      window.location.hash !== AUTH_RATE_LIMITED_FRAGMENT)
+  ) {
     return
   }
 
@@ -79,14 +89,18 @@ function clearAuthErrorFragment(): void {
  *   authStatus: The current Django session state.
  *
  * Returns:
- *   The visible error flag and callbacks to begin or clear an auth attempt.
+ *   The visible error kind and callbacks to begin or clear an auth attempt.
  */
 export function useAuthFlowError(authStatus: AuthStatus): AuthFlowErrorHookResult {
   // The initializer only reads state; fragment and marker consumption happens in an effect.
   const [authFlowError, setAuthFlowError] = useState(readAuthFlowError)
 
   useEffect(() => {
-    if (typeof window === 'undefined' || window.location.hash !== AUTH_ERROR_FRAGMENT) {
+    if (
+      typeof window === 'undefined' ||
+      (window.location.hash !== AUTH_ERROR_FRAGMENT &&
+        window.location.hash !== AUTH_RATE_LIMITED_FRAGMENT)
+    ) {
       return
     }
 
@@ -111,7 +125,7 @@ export function useAuthFlowError(authStatus: AuthStatus): AuthFlowErrorHookResul
    *   Nothing.
    */
   const beginAuthAttempt = useCallback(() => {
-    setAuthFlowError(false)
+    setAuthFlowError(null)
     writeSessionStorage(AUTH_ATTEMPT_STORAGE_KEY, 'true')
   }, [])
 
@@ -122,7 +136,7 @@ export function useAuthFlowError(authStatus: AuthStatus): AuthFlowErrorHookResul
    *   Nothing.
    */
   const clearAuthFlowState = useCallback(() => {
-    setAuthFlowError(false)
+    setAuthFlowError(null)
     removeSessionStorage(AUTH_ATTEMPT_STORAGE_KEY)
   }, [])
 

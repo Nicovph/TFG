@@ -790,6 +790,21 @@ FRONTEND_AUTH_RETURN_URL = aplication_config.get(
     "",
 ).strip()
 
+# Preference writes update PostgreSQL and may emit an audit event, so combine a
+# short burst budget with a sustained budget while leaving GET unrestricted.
+PREFERENCES_UPDATE_ATTEMPTS_PER_MINUTE = get_integer_setting(
+    "PREFERENCES_UPDATE_ATTEMPTS_PER_MINUTE",
+    default=20,
+    minimum=1,
+    maximum=300,
+)
+PREFERENCES_UPDATE_ATTEMPTS_PER_DAY = get_integer_setting(
+    "PREFERENCES_UPDATE_ATTEMPTS_PER_DAY",
+    default=200,
+    minimum=1,
+    maximum=10_000,
+)
+
 
 # Google OpenID Connect configuration. The sensitive values are optional at
 # process start so local commands can run without real provider credentials.
@@ -826,6 +841,15 @@ GOOGLE_OIDC_AUTH_FLOW_TTL_SECONDS = get_integer_setting(
     default=300,
     minimum=60,
     maximum=900,
+)
+# Bound repeated temporary OIDC flow creation to one server-issued session.
+# Deleting the cookie can reset this auxiliary limit, so it is not presented as
+# a complete denial-of-service control.
+GOOGLE_OIDC_LOGIN_ATTEMPTS_PER_MINUTE = get_integer_setting(
+    "GOOGLE_OIDC_LOGIN_ATTEMPTS_PER_MINUTE",
+    default=5,
+    minimum=1,
+    maximum=60,
 )
 # Cache alias used for temporary Google OIDC flow metadata.
 # If variable does not exist, the default cache will be used; if exists, but has None, "", 0, False..., `or default` forces the default cache;

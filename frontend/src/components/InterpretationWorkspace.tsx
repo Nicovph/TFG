@@ -137,7 +137,7 @@ export function InterpretationWorkspace({
   const processingDialogRef = useRef<HTMLDialogElement>(null)
   const resultHeadingRef = useRef<HTMLHeadingElement>(null)
   const preferenceBlockingMessage =
-    preferenceStatus === 'ready'
+    preferenceStatus === 'ready' || preferenceStatus === 'rate-limited'
       ? null
       : preferenceStatus === 'load-error' || preferenceStatus === 'save-error'
         ? 'Revisa las preferencias en Ajustes antes de enviar.'

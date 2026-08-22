@@ -10,6 +10,7 @@ import {
   type PreferenceState,
 } from '../data/preferences'
 import type { PreferenceRequestStatus } from '../hooks/useUserPreferences'
+import { formatRetryAfter } from '../utils/formatRetryAfter'
 import styles from './PreferencesPanel.module.css'
 
 export const SETTINGS_PANEL_ID = 'settings-panel'
@@ -17,6 +18,7 @@ export const SETTINGS_PANEL_ID = 'settings-panel'
 interface PreferencesPanelProps {
   open: boolean
   preferences: PreferenceState
+  retryAfterSeconds: number | null
   status: PreferenceRequestStatus
   onPreferenceChange: PreferenceChangeHandler
   onRetry: () => void
@@ -34,6 +36,7 @@ interface PreferencesPanelProps {
 export function PreferencesPanel({
   open,
   preferences,
+  retryAfterSeconds,
   status,
   onPreferenceChange,
   onRetry,
@@ -42,8 +45,10 @@ export function PreferencesPanel({
     return null
   }
 
-  const controlsDisabled =
-    status === 'loading' || status === 'saving' || status === 'load-error'
+  const controlsDisabled = status !== 'ready'
+  const retryMessage = retryAfterSeconds
+    ? `Espera aproximadamente ${formatRetryAfter(retryAfterSeconds)} antes de volver a cambiarlas.`
+    : 'Espera antes de volver a cambiarlas.'
   const statusMessage =
     status === 'loading'
       ? 'Cargando preferencias…'
@@ -51,10 +56,14 @@ export function PreferencesPanel({
         ? 'Guardando cambios…'
         : status === 'load-error'
           ? 'No se pudieron cargar tus preferencias.'
-          : status === 'save-error'
-            ? 'No se pudo confirmar si el cambio se guardó. Se ha restaurado el valor anterior en la pantalla.'
-            : null
-  const hasError = status === 'load-error' || status === 'save-error'
+          : status === 'rate-limited'
+            ? `Has alcanzado temporalmente el límite de cambios de preferencias. ${retryMessage} Se ha restaurado el valor anterior.`
+            : status === 'save-error'
+              ? 'No se pudo confirmar si el cambio se guardó. Se ha restaurado el valor anterior en la pantalla.'
+              : null
+  const hasError =
+    status === 'load-error' || status === 'save-error' || status === 'rate-limited'
+  const canRetry = status === 'load-error' || status === 'save-error'
 
   return (
     <section
@@ -97,7 +106,7 @@ export function PreferencesPanel({
       {statusMessage ? (
         <div className={hasError ? styles.errorStatus : styles.requestStatus}>
           <span role={hasError ? 'alert' : 'status'}>{statusMessage}</span>
-          {hasError ? (
+          {canRetry ? (
             <button className={styles.retryButton} type="button" onClick={onRetry}>
               Recargar preferencias
             </button>

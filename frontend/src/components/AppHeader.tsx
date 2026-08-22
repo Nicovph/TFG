@@ -25,6 +25,7 @@ interface AppHeaderProps {
    */
   menuOpen: boolean
   preferences: PreferenceState
+  preferenceRetryAfterSeconds: number | null
   preferenceStatus: PreferenceRequestStatus
   settingsOpen: boolean
   onAccountToggle: () => void
@@ -53,6 +54,7 @@ export function AppHeader({
   menuButtonRef,
   menuOpen,
   preferences,
+  preferenceRetryAfterSeconds,
   preferenceStatus,
   settingsOpen,
   onAccountToggle,
@@ -124,6 +126,7 @@ export function AppHeader({
           <PreferencesPanel
             open={settingsOpen}
             preferences={preferences}
+            retryAfterSeconds={preferenceRetryAfterSeconds}
             status={preferenceStatus}
             onPreferenceChange={onPreferenceChange}
             onRetry={onPreferencesRetry}

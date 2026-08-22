@@ -120,6 +120,7 @@ function App() {
   } = useInterpretationWorkspace()
   const {
     preferences,
+    preferenceRetryAfterSeconds,
     preferenceStatus,
     resetPreferences,
     retryPreferences,
@@ -150,6 +151,8 @@ function App() {
       : 'Volver a la página de inicio'
   const infoPage = isInfoView(renderedView) ? INFO_PAGES[renderedView] : null
   const visualSupportEnabled = preferences.visualSupport === 'enabled'
+  const preferencesUsable =
+    preferenceStatus === 'ready' || preferenceStatus === 'rate-limited'
 
   /**
    * Updates the storage whenever the view changes.
@@ -345,7 +348,19 @@ function App() {
     closeTransientPanels()
   }
 
-  if (authFlowError) {
+  if (authFlowError === 'rate-limited') {
+    return (
+      <StatusView
+        logoSrc={logoMark}
+        message="Se han realizado varios intentos de inicio de sesión seguidos. Espera aproximadamente un minuto antes de volver a intentarlo."
+        mode="error"
+        primaryAction={{ label: 'Volver al inicio', onClick: handleReturnHomeFromAuthError }}
+        title="Espera antes de volver a intentarlo"
+      />
+    )
+  }
+
+  if (authFlowError === 'authentication-failed') {
     return (
       <StatusView
         logoSrc={logoMark}
@@ -428,6 +443,7 @@ function App() {
               menuButtonRef={workspaceMenuButtonRef}
               menuOpen={menuOpen}
               preferences={preferences}
+              preferenceRetryAfterSeconds={preferenceRetryAfterSeconds}
               preferenceStatus={preferenceStatus}
               settingsOpen={settingsOpen}
               onAccountToggle={handleAccountToggle}
@@ -439,9 +455,9 @@ function App() {
               onPreferencesRetry={retryPreferences}
               onSettingsToggle={handleSettingsToggle}
             />
-            {/* Avoid race conditions with the preference update PATCH. */}
+            {/* Block submission only while preferences are pending or uncertain. */}
             <InterpretationWorkspace
-              canSubmit={canSubmit && preferenceStatus === 'ready'}
+              canSubmit={canSubmit && preferencesUsable}
               contextExpanded={contextExpanded}
               errorMessage={errorMessage}
               errorTitle={errorTitle}
