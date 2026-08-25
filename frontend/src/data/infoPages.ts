@@ -44,7 +44,7 @@ export const INFO_PAGES: Record<InfoView, InfoPageContent> = {
     paragraphs: [
       'La aplicación está diseñada para minimizar los datos persistidos y evitar guardar mensajes, prompts, interpretaciones' +
       ' o respuestas completas del modelo.',
-      'Las integraciones externas se gestionan desde el backend. Antes de enviar contenido al aistente virtual, este reduce' +
+      'Las integraciones externas se gestionan desde el backend. Antes de enviar contenido al asistente virtual, este reduce' +
       ' identificadores habituales, aunque esta medida no puede detectar todos los datos personales ni garantizar el' +
       ' anonimato. La aplicación informa de este procesamiento externo antes de solicitar una interpretación.',
     ],

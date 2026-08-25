@@ -85,9 +85,11 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
-  // These references restore focus only after returning from an informational page.
+  // These references support intentional focus movement after view changes.
+  const homeGoogleEntryButtonRef = useRef<HTMLButtonElement>(null)
   const homeMenuButtonRef = useRef<HTMLButtonElement>(null)
   const workspaceMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const pendingLogoutHomeFocusRef = useRef(false)
   const pendingInfoReturnFocusRef = useRef<'home' | 'main' | null>(null)
   const {
     authStatus,
@@ -175,6 +177,16 @@ function App() {
   }, [preferences.theme])
 
   useEffect(() => {
+    if (pendingLogoutHomeFocusRef.current && renderedView === 'home') {
+      const focusTarget = homeGoogleEntryButtonRef.current
+
+      if (focusTarget) {
+        focusTarget.focus()
+        pendingLogoutHomeFocusRef.current = false
+        return
+      }
+    }
+
     const pendingDestination = pendingInfoReturnFocusRef.current
 
     if (!pendingDestination || renderedView !== pendingDestination) {
@@ -325,10 +337,13 @@ function App() {
    *   A promise that resolves after success or after exposing a recoverable error.
    */
   const handleLogout = async () => {
+    pendingLogoutHomeFocusRef.current = true
+
     try {
       await logout()
       clearLocalSessionState()
     } catch {
+      pendingLogoutHomeFocusRef.current = false
       // useAuthSession exposes logoutStatus === 'error' for accessible recovery UI.
     }
   }
@@ -415,6 +430,7 @@ function App() {
       <div id="app-content" inert={menuOpen}>
         {renderedView === 'home' ? (
           <HomeView
+            googleEntryButtonRef={homeGoogleEntryButtonRef}
             logoSrc={logoMark}
             menuButtonRef={homeMenuButtonRef}
             menuOpen={menuOpen}

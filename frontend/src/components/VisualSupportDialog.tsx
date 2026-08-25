@@ -61,7 +61,7 @@ export function VisualSupportDialog({
       }}
     >
       <div className={styles.dialogContent}>
-        <button type="button" autoFocus onClick={onClose}>
+        <button type="button" onClick={onClose}>
           Cerrar
         </button>
         {imageFailed ? (

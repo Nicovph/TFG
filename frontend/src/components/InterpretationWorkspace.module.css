@@ -86,6 +86,13 @@
   align-items: start;
 }
 
+/* Overlay the live status and its sibling result region in the output grid cell. */
+.resultStatus,
+.resultPanel {
+  grid-column: 2;
+  grid-row: 1;
+}
+
 /* Apply consistent label emphasis across primary and optional input fields. */
 .inputPanel label,
 .contextField label {
@@ -136,11 +143,21 @@
   opacity: 0.58;
 }
 
-/* Use one muted semantic color for placeholders and the empty-result message. */
+/* Use one muted semantic color for placeholders, loading, and empty-result messages. */
 .inputPanel textarea::placeholder,
 .contextField textarea::placeholder,
+.resultStatus,
 .resultPanel > p {
   color: var(--color-text-placeholder);
+}
+
+/* Keep the live announcement visible without blocking result interaction. */
+.resultStatus {
+  align-self: start;
+  z-index: 1;
+  margin: 0;
+  padding: var(--space-md) 18px;
+  pointer-events: none;
 }
 
 /* Share an accessible minimum target height across context and submission actions. */
@@ -365,6 +382,12 @@
 
   .workGrid {
     grid-template-columns: 1fr;
+  }
+
+  .resultStatus,
+  .resultPanel {
+    grid-column: 1;
+    grid-row: 2;
   }
 
   .inputPanel textarea {

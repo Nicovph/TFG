@@ -10,6 +10,7 @@ import { MenuButton } from './MenuButton'
 import styles from './HomeView.module.css'
 
 interface HomeViewProps {
+  googleEntryButtonRef: Ref<HTMLButtonElement>
   logoSrc: string
   menuButtonRef: Ref<HTMLButtonElement>
   menuOpen: boolean
@@ -27,6 +28,7 @@ interface HomeViewProps {
  *   The home view element.
  */
 export function HomeView({
+  googleEntryButtonRef,
   logoSrc,
   menuButtonRef,
   menuOpen,
@@ -45,7 +47,12 @@ export function HomeView({
           <span>TEA</span>slator
         </h1>
         <p className={styles.brandTagline}>{BRAND_TAGLINE}</p>
-        <button className={styles.googleButton} type="button" onClick={onGoogleEntry}>
+        <button
+          className={styles.googleButton}
+          type="button"
+          onClick={onGoogleEntry}
+          ref={googleEntryButtonRef}
+        >
           <img
             className={styles.googleLogo}
             src={googleLogo}

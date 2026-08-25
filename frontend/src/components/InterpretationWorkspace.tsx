@@ -46,6 +46,7 @@ const CONTEXT_FIELDS = [
     id: 'previous-context',
     label: 'Contexto anterior',
     placeholder: 'Mensaje anterior (opcional).',
+    speakerLabel: '¿Quién escribió el mensaje anterior?',
     speakerField: 'previousContextSpeaker',
     textField: 'previousContext',
   },
@@ -53,6 +54,7 @@ const CONTEXT_FIELDS = [
     id: 'following-context',
     label: 'Contexto posterior',
     placeholder: 'Mensaje posterior (opcional).',
+    speakerLabel: '¿Quién escribió el mensaje posterior?',
     speakerField: 'followingContextSpeaker',
     textField: 'followingContext',
   },
@@ -60,8 +62,9 @@ const CONTEXT_FIELDS = [
   id: string
   label: string
   placeholder: string
+  speakerLabel: string
   speakerField: ContextSpeakerField
-  // // Exclude 'targetMessage' — only previousContext and followingContext are allowed here.
+  // Exclude 'targetMessage' — only previousContext and followingContext are allowed here.
   textField: Exclude<InterpretationTextField, 'targetMessage'>
 }[]
 
@@ -252,7 +255,7 @@ export function InterpretationWorkspace({
                         rows={3}
                       />
                       <label htmlFor={`${context.id}-speaker`}>
-                        ¿Quién escribió este mensaje?
+                        {context.speakerLabel}
                       </label>
                       <select
                         id={`${context.id}-speaker`}
@@ -277,14 +280,16 @@ export function InterpretationWorkspace({
 
           </div>
 
+          {/* Keep the live region mounted and outside aria-busy so updates are announced. */}
+          <p className={styles.resultStatus} role="status">
+            {interpretationStatus === 'loading' ? 'Interpretando el mensaje…' : ''}
+          </p>
           <section
             className={styles.resultPanel}
             aria-label="Resultado de la interpretación"
             aria-busy={interpretationStatus === 'loading'}
           >
-            {interpretationStatus === 'loading' ? (
-              <p role="status">Interpretando el mensaje…</p>
-            ) : interpretationStatus === 'error' ? (
+            {interpretationStatus === 'loading' ? null : interpretationStatus === 'error' ? (
               <div role="alert">
                 <h2>{errorTitle}</h2>
                 <p>{errorMessage}</p>

@@ -112,7 +112,7 @@ export function Tooltip({ align = 'center', children, label }: TooltipProps) {
   }
 
   /**
-   * Clear pointer visibility after pointer exit or cancellation.
+   * Clear pointer visibility after pointer activation, exit, or cancellation.
    */
   const handlePointerExit = () => {
     setHovered(false)
@@ -124,6 +124,7 @@ export function Tooltip({ align = 'center', children, label }: TooltipProps) {
       onBlurCapture={handleBlur}
       onFocusCapture={handleFocus}
       onPointerCancel={handlePointerExit}
+      onPointerDownCapture={handlePointerExit}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerExit}
     >

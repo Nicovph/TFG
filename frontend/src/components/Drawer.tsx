@@ -69,6 +69,12 @@ export function Drawer({ open, onClose, onNavigate }: DrawerProps) {
       return undefined
     }
 
+    /**
+     * Close the drawer with Escape and keep Tab focus inside the modal panel.
+     *
+     * Args:
+     *   event: The keyboard event dispatched by the document.
+     */
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
