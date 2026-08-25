@@ -1,4 +1,4 @@
-Django==6.0.6
+Django==6.0.8
 djangorestframework==3.17.1
 google-auth>=2.40,<3.0
 groq>=1.5,<2.0
