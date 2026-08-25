@@ -4,12 +4,15 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Mapping
+from collections.abc import Mapping
+
+from django.views.decorators.debug import sensitive_variables
 
 from .config import GoogleOIDCConfig
 from .exceptions import GoogleOIDCProviderError
 
 
+@sensitive_variables()
 def exchange_authorization_code_for_tokens(
     *,
     code: str,
@@ -33,7 +36,7 @@ def exchange_authorization_code_for_tokens(
     code_verifier = flow_metadata.get("code_verifier")
 
     if not isinstance(code_verifier, str) or not code_verifier:
-        raise GoogleOIDCProviderError("Falta el code_verifier PKCE.")
+        raise GoogleOIDCProviderError("Falta el parámetro code_verifier de PKCE.")
 
     # urlencode converts a dict in a form chain.
     request_body = urllib.parse.urlencode(

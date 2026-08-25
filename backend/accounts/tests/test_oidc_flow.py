@@ -8,9 +8,10 @@ from django.conf import settings
 from django.core.cache import cache, caches
 # override_setings allows temporarily changing the value of one or more Django project settings during 
 # the execution of a unit test, automatically restoring the original values ​​once the test is complete
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from google.auth.exceptions import TransportError
 
 from ..models import CustomUser
 from backend.audit.models import SecurityEvent, SecurityEventType
@@ -484,6 +485,58 @@ class GoogleOIDCFlowTests(TestCase):
         verifier_mock.assert_not_called()
         self.assertFalse(CustomUser.objects.exists())
 
+    def test_callback_hides_tokens_when_certificate_fetch_fails(self) -> None:
+        """Return a generic redirect when Google signing keys are unavailable.
+
+        Args:
+            self: The test case instance.
+        """
+        state, _metadata, _cache_key = self._start_flow()
+        authorization_code = "sensitive-authorization-code"
+        access_token = "sensitive-access-token"
+        id_token = fake_jwt()
+        provider_detail = "private-certificate-endpoint"
+
+        with (
+            mock.patch(
+                "backend.accounts.services.session.exchange_authorization_code_for_tokens",
+                return_value={
+                    "id_token": id_token,
+                    "access_token": access_token,
+                    "token_type": "Bearer",
+                },
+            ),
+            mock.patch(
+                "google.oauth2.id_token.verify_oauth2_token",
+                side_effect=TransportError(provider_detail),
+            ),
+        ):
+            response = self.client.get(
+                reverse("google-login-callback"),
+                {
+                    "code": authorization_code,
+                    "state": state,
+                },
+            )
+
+        self._assert_frontend_redirect(response, authentication_failed=True)
+        public_response = response.content.decode("utf-8") + response["Location"]
+        for sensitive_value in (
+            authorization_code,
+            state,
+            access_token,
+            id_token,
+            provider_detail,
+        ):
+            with self.subTest(sensitive_value=sensitive_value):
+                self.assertNotIn(sensitive_value, public_response)
+
+        self.assertTrue(
+            SecurityEvent.objects.filter(
+                event_type=SecurityEventType.LOGIN_FAILED,
+            ).exists()
+        )
+
 
     def test_session_status_is_minimized(self) -> None:
         """Return only authentication status and no identifiers.
@@ -513,7 +566,7 @@ class GoogleOIDCFlowTests(TestCase):
         self.assertEqual(set(authenticated_response.json()), {"authenticated"})
 
     def test_logout_requires_session_and_clears_authenticated_session(self) -> None:
-        """Logout is a state-changing authenticated backend operation.
+        """Require CSRF before logout and clear only an accepted session.
 
         Args:
             self: The test case instance.
@@ -525,13 +578,37 @@ class GoogleOIDCFlowTests(TestCase):
         user = CustomUser.objects.create_user(
             google_subject="google-subject-logout",
         )
-        self.client.force_login(user)
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(user)
+        csrf_response = csrf_client.get(reverse("session-status"))
+        csrf_token = csrf_response.cookies[settings.CSRF_COOKIE_NAME].value
 
-        response = self.client.post(reverse("auth-logout"))
+        rejected_response = csrf_client.post(
+            reverse("auth-logout"),
+            data="{}",
+            content_type="application/json",
+        )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"authenticated": False})
-        self.assertFalse("_auth_user_id" in self.client.session)
+        self.assertEqual(rejected_response.status_code, 403)
+        self.assertIn("_auth_user_id", csrf_client.session)
+        self.assertFalse(
+            SecurityEvent.objects.filter(
+                actor=user,
+                event_type=SecurityEventType.LOGOUT,
+            ).exists()
+        )
+
+        accepted_response = csrf_client.post(
+            reverse("auth-logout"),
+            data="{}",
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
+        self.assertEqual(accepted_response.status_code, 200)
+        self.assertEqual(accepted_response.json(), {"authenticated": False})
+        self.assertIn("no-store", accepted_response["Cache-Control"])
+        self.assertNotIn("_auth_user_id", csrf_client.session)
         logout_event = SecurityEvent.objects.get(
             actor=user,
             event_type=SecurityEventType.LOGOUT,

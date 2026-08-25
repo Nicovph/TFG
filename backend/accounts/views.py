@@ -8,6 +8,7 @@ from django.http import HttpRequest, HttpResponseRedirect # HttpRequest is used 
 from django.utils.cache import patch_cache_control # Used to prevent caching of sensitive responses (modifies Cache-Control header).
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie # This decorator forces Django to send the CSRF cookie in the response.
+from django.views.decorators.debug import sensitive_variables
 from rest_framework import status
 from rest_framework.decorators import (
     api_view,
@@ -230,6 +231,7 @@ def google_login_start(request: HttpRequest) -> HttpResponseRedirect | Response:
         return response
 
 
+@sensitive_variables()
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def google_login_callback(request: Request) -> HttpResponseRedirect | Response:

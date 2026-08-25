@@ -4,6 +4,7 @@ import uuid
 
 from django.contrib.auth import login, logout
 from django.http import HttpRequest
+from django.views.decorators.debug import sensitive_variables
 
 from backend.audit.models import SecurityEvent, SecurityEventType
 from backend.audit.request_context import get_current_request_id
@@ -20,6 +21,7 @@ from .token_exchange import exchange_authorization_code_for_tokens
 from .token_validation import validate_google_id_token
 
 
+@sensitive_variables()
 def complete_google_login(
     request: HttpRequest,
     *,

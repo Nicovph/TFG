@@ -2,8 +2,9 @@
 
 from unittest import mock
 
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
+from google.auth.exceptions import TransportError
 
 from .. import services
 from .helpers import fake_jwt, valid_claims
@@ -59,7 +60,7 @@ class GoogleOIDCTokenValidationTests(TestCase):
         with mock.patch(
             "backend.accounts.services.token_validation.verify_google_id_token_signature",
             return_value=claims,
-        ):
+        ) as verifier:
             validated_claims = services.validate_google_id_token(
                 id_token=fake_jwt(),
                 expected_nonce="nonce-value",
@@ -68,6 +69,11 @@ class GoogleOIDCTokenValidationTests(TestCase):
             )
 
         self.assertEqual(validated_claims["sub"], "google-subject-flow")
+        verifier.assert_called_once_with(
+            id_token=fake_jwt(),
+            audience="client-id.apps.googleusercontent.com",
+            timeout_seconds=self.config.timeout_seconds,
+        )
 
     def test_validate_id_token_rejects_nonce_issuer_audience_and_expiry(self) -> None:
         """Reject ID tokens with mismatched security claims.
@@ -279,3 +285,91 @@ class GoogleOIDCTokenValidationTests(TestCase):
                     expected_client_id="client-id.apps.googleusercontent.com",
                     config=self.config,
                 )
+
+
+class GoogleOIDCSignatureTransportTests(SimpleTestCase):
+    """Verify the bounded network boundary used for Google signing keys."""
+
+    @mock.patch("google.auth.transport.requests.Request")
+    @mock.patch("google.oauth2.id_token.verify_oauth2_token")
+    def test_certificate_request_uses_exact_configured_timeout(
+        self,
+        verifier_mock: mock.Mock,
+        request_class_mock: mock.Mock,
+    ) -> None:
+        """Apply the configured timeout to the certificate HTTP request.
+
+        Args:
+            self: The test case instance.
+            verifier_mock: Mocked Google ID token verifier.
+            request_class_mock: Mocked Google Auth request constructor.
+        """
+        transport_mock = mock.Mock()
+        request_class_mock.return_value = transport_mock
+        expected_claims = valid_claims(nonce="nonce-value")
+
+        def verify_with_certificate_fetch(
+            id_token: str,
+            request: object,
+            audience: str,
+        ) -> dict[str, object]:
+            """Exercise the request callable exactly as google-auth does.
+
+            Args:
+                id_token: Synthetic compact token supplied to google-auth.
+                request: Bounded request callable supplied by the application.
+                audience: Expected client identifier supplied by the application.
+
+            Returns:
+                Synthetic verified claims.
+            """
+            self.assertEqual(id_token, "synthetic-id-token")
+            self.assertEqual(audience, "client-id.apps.googleusercontent.com")
+            request(  # type: ignore[operator]
+                "https://www.googleapis.com/oauth2/v1/certs",
+                method="GET",
+            )
+            return expected_claims
+
+        verifier_mock.side_effect = verify_with_certificate_fetch
+
+        claims = services.verify_google_id_token_signature(
+            id_token="synthetic-id-token",
+            audience="client-id.apps.googleusercontent.com",
+            timeout_seconds=7,
+        )
+
+        self.assertEqual(claims, expected_claims)
+        transport_mock.assert_called_once_with(
+            "https://www.googleapis.com/oauth2/v1/certs",
+            method="GET",
+            timeout=7,
+        )
+
+    @mock.patch("google.oauth2.id_token.verify_oauth2_token")
+    def test_certificate_transport_error_becomes_generic_provider_failure(
+        self,
+        verifier_mock: mock.Mock,
+    ) -> None:
+        """Convert certificate network failures without exposing details.
+
+        Args:
+            self: The test case instance.
+            verifier_mock: Mocked Google ID token verifier.
+        """
+        private_error = "private-network-endpoint"
+        verifier_mock.side_effect = TransportError(private_error)
+
+        with self.assertRaises(services.GoogleOIDCProviderError) as context:
+            services.verify_google_id_token_signature(
+                id_token="synthetic-sensitive-id-token",
+                audience="client-id.apps.googleusercontent.com",
+                timeout_seconds=5,
+            )
+
+        self.assertEqual(
+            str(context.exception),
+            "No se pudo verificar temporalmente el ID token de Google.",
+        )
+        self.assertNotIn(private_error, str(context.exception))
+        self.assertNotIn("synthetic-sensitive-id-token", str(context.exception))

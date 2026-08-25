@@ -80,11 +80,24 @@ ALLOWED_HOSTS = [
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "filters": {
+        "django_server_query_string": {
+            "()": "backend.audit.logging_filters.DjangoServerQueryStringFilter",
+        },
+    },
     "formatters": {
         "llm_operational": {
             # Include only severity, logger name, and the pre-sanitized event.
             "format": "{levelname} {name} {message}",
             # str format style.
+            "style": "{",
+        },
+        "django_server": {
+            # Instantiate Django's specialized ServerFormatter (adds server_time).
+            "()": "django.utils.log.ServerFormatter",
+            # Render as: [24/Aug/2026 21:15:03] "GET /api/health/ HTTP/1.1" 200 42.
+            "format": "[{server_time}] {message}",
+            # Use str.format-style placeholders ({...}) instead of %-style.
             "style": "{",
         },
     },
@@ -95,8 +108,24 @@ LOGGING = {
             "level": "INFO",
             "stream": "ext://sys.stdout",
         },
+        "django_server_console": {
+            # Write django.server records to stdout.
+            "class": "logging.StreamHandler",
+            # Apply the ServerFormatter that adds request timestamps.
+            "formatter": "django_server",
+            "level": "INFO",
+            "stream": "ext://sys.stdout",
+        },
     },
     "loggers": {
+        "django.server": {
+            # Route runserver request logs only to the dedicated console handler.
+            "handlers": ["django_server_console"],
+            # Strip query strings before the record is formatted.
+            "filters": ["django_server_query_string"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "backend.interpretation.provider": {
             "handlers": ["llm_console"],
             "level": "INFO",

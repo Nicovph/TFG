@@ -3,18 +3,27 @@
 import base64
 import binascii
 import json
-from typing import Any, Mapping
+from functools import partial
+from typing import Any
+from collections.abc import Mapping
 
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare
+from django.views.decorators.debug import sensitive_variables
 
 from backend.accounts.models import google_subject_validator
 
 from .config import GoogleOIDCConfig
-from .exceptions import GoogleOIDCConfigurationError, GoogleOIDCTokenError
+from .exceptions import (
+    GoogleOIDCConfigurationError,
+    GoogleOIDCProviderError,
+    GoogleOIDCTokenError,
+)
 
 
+# Hide variables from Django's error reports (tracebacks) when DEBUG=False.
+@sensitive_variables()
 def validate_google_id_token(
     *,
     id_token: str,
@@ -34,6 +43,7 @@ def validate_google_id_token(
         The validated ID token claims.
 
     Raises:
+        GoogleOIDCProviderError: If Google certificate retrieval fails.
         GoogleOIDCTokenError: If the token header, signature or claims fail
             validation.
     """
@@ -46,6 +56,7 @@ def validate_google_id_token(
     claims = verify_google_id_token_signature(
         id_token=id_token,
         audience=expected_client_id,
+        timeout_seconds=config.timeout_seconds,
     )
 
     issuer = _required_string_claim(claims, "iss")
@@ -62,7 +73,7 @@ def validate_google_id_token(
     nonce = _required_string_claim(claims, "nonce")
 
     if not constant_time_compare(nonce, expected_nonce):
-        raise GoogleOIDCTokenError("Nonce OIDC no válido.")
+        raise GoogleOIDCTokenError("Valor nonce OIDC no válido.")
 
     subject = _required_string_claim(claims, "sub")
 
@@ -107,25 +118,30 @@ def decode_unverified_jwt_header(id_token: str) -> Mapping[str, object]:
     return decoded
 
 
+@sensitive_variables()
 def verify_google_id_token_signature(
     *,
     id_token: str,
     audience: str,
+    timeout_seconds: int,
 ) -> Mapping[str, object]:
     """Verify the Google ID token with the maintained Google Auth library.
 
     Args:
         id_token: The compact JWT returned by Google.
         audience: The expected OAuth client identifier.
+        timeout_seconds: Maximum duration allowed for certificate retrieval.
 
     Returns:
         The verified ID token claims.
 
     Raises:
         GoogleOIDCConfigurationError: If the verification dependency is missing.
+        GoogleOIDCProviderError: If Google certificate retrieval fails.
         GoogleOIDCTokenError: If Google Auth rejects the ID token.
     """
     try:
+        from google.auth import exceptions as google_auth_exceptions
         from google.auth.transport.requests import Request as GoogleAuthRequest
         from google.oauth2 import id_token as google_id_token
     except ImportError as exc:
@@ -134,13 +150,23 @@ def verify_google_id_token_signature(
         ) from exc
 
     try:
+        bounded_request = partial(
+            GoogleAuthRequest(),
+            timeout=timeout_seconds,
+        )
         claims = google_id_token.verify_oauth2_token(
             id_token,
-            GoogleAuthRequest(),
+            bounded_request,
             audience,
         )
+    except google_auth_exceptions.TransportError as exc:
+        raise GoogleOIDCProviderError(
+            "No se pudo verificar temporalmente el ID token de Google."
+        ) from exc
     except ValueError as exc:
-        raise GoogleOIDCTokenError("Firma o claims del ID token no válidos.") from exc
+        raise GoogleOIDCTokenError(
+            "Firma o claims del ID token no válidos."
+        ) from exc
 
     if not isinstance(claims, Mapping):
         raise GoogleOIDCTokenError("Claims del ID token no válidos.")
@@ -189,7 +215,9 @@ def _required_string_claim(
     value = claims.get(claim_name)
 
     if not isinstance(value, str) or not value:
-        raise GoogleOIDCTokenError(f"Claim OIDC obligatorio ausente: {claim_name}.")
+        raise GoogleOIDCTokenError(
+            f"Claim OIDC obligatorio ausente: {claim_name}."
+        )
 
     return value
 
@@ -210,7 +238,9 @@ def _required_int_claim(claims: Mapping[str, object], claim_name: str) -> int:
     value = claims.get(claim_name)
 
     if type(value) is not int:
-        raise GoogleOIDCTokenError(f"Claim OIDC obligatorio ausente: {claim_name}.")
+        raise GoogleOIDCTokenError(
+            f"Claim OIDC obligatorio ausente: {claim_name}."
+        )
 
     return value
 
@@ -272,7 +302,7 @@ def _validate_expiry_and_issued_at(
     issued_at = _required_int_claim(claims, "iat")
 
     if expires_at <= now:
-        raise GoogleOIDCTokenError("ID token caducado.")
+        raise GoogleOIDCTokenError("El ID token ha caducado.")
 
     if issued_at > now + max_iat_skew_seconds:
-        raise GoogleOIDCTokenError("ID token emitido en el futuro.")
+        raise GoogleOIDCTokenError("El ID token fue emitido en el futuro.")
