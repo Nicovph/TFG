@@ -65,8 +65,7 @@ def get_database_credentials_file(
 # SECRET_KEY is loaded from backend-only configuration after the common and
 # profile-specific settings have been resolved below.
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# DEBUG is resolved from the validated application configuration below.
 
 # Accept only the browser hostname and the loopback address used by the
 # container healthcheck in the local HTTPS development environment.
@@ -586,6 +585,11 @@ def get_boolean_setting(name: str, *, default: bool) -> bool:
     )
 
 
+# Source-based local development stays convenient while deployments can disable
+# Django debug mode explicitly through the strictly parsed environment setting.
+DEBUG = get_boolean_setting("DJANGO_DEBUG", default=True)
+
+
 def get_cookie_samesite_setting(name: str, *, default: str) -> str:
     """Parse and validate a SameSite cookie setting.
 
@@ -745,6 +749,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Customized user
 

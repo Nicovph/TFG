@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+# Build the non-root Vite development image used by the local MVP stack.
 FROM node:24.19.0-bookworm-slim
 
 # Keep the application in a dedicated directory owned by the unprivileged user

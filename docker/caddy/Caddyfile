@@ -1,3 +1,4 @@
+# Terminate local HTTPS and route browser traffic to the trusted application services.
 {
 	# Caddy runs inside Docker and cannot install its CA in the Windows trust store.
 	# Trust installation is performed manually and explicitly on the host.
@@ -8,8 +9,17 @@ localhost {
 	# Issue the localhost certificate from Caddy's private local CA.
 	tls internal
 
-	# Send Django API, Admin, and development static resources to the backend.
-	@django path /api /api/* /admin /admin/* /static /static/*
+	# Serve collected Django Admin assets without relying on DEBUG or runserver.
+	# Match any request under /static/* and strip the /static prefix.
+	handle_path /static/* {
+		# Set the filesystem root to the directory where Django's collectstatic output lives
+		root * /srv/django-static
+		# Serve the requested file from that directory
+		file_server
+	}
+
+	# Send Django API and Admin requests to the backend.
+	@django path /api /api/* /admin /admin/*
 
 	handle @django {
 		reverse_proxy backend:8000

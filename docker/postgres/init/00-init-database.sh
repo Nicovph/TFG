@@ -9,6 +9,7 @@ set -Eeuo pipefail
 # -u: Treat unset variables as errors.
 # -o pipefail: Fail a pipeline if any command fails.
 
+# Read one required variable from a role-specific Docker secret file.
 read_env_value() {
     local file_path="$1"
     local variable_name="$2"

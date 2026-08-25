@@ -1,4 +1,4 @@
-"""Tests for secure backend secret loading in project settings."""
+"""Tests for strict security settings and backend secret loading."""
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -8,6 +8,47 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
 from Traductor_TEA import settings as project_settings
+
+
+class BooleanSecuritySettingTests(SimpleTestCase):
+    """Validate strict Boolean parsing for security-sensitive settings."""
+
+    def test_django_debug_accepts_explicit_false(self) -> None:
+        """Allow Compose to disable Django debug mode with a strict literal.
+
+        Args:
+            self: The test case instance.
+        """
+        with mock.patch.object(
+            project_settings,
+            "aplication_config",
+            {"DJANGO_DEBUG": "false"},
+        ):
+            debug_enabled = project_settings.get_boolean_setting(
+                "DJANGO_DEBUG",
+                default=True,
+            )
+
+        self.assertFalse(debug_enabled)
+
+    def test_django_debug_rejects_ambiguous_value(self) -> None:
+        """Fail closed when Django debug mode is not a recognized Boolean.
+
+        Args:
+            self: The test case instance.
+        """
+        with (
+            mock.patch.object(
+                project_settings,
+                "aplication_config",
+                {"DJANGO_DEBUG": "sometimes"},
+            ),
+            self.assertRaisesRegex(ImproperlyConfigured, "DJANGO_DEBUG"),
+        ):
+            project_settings.get_boolean_setting(
+                "DJANGO_DEBUG",
+                default=True,
+            )
 
 
 class SecretSettingTests(SimpleTestCase):

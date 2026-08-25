@@ -1,3 +1,4 @@
+# Build the non-root Django image used by runtime, migration, and test services.
 FROM python:3.13.15-slim-bookworm
 
 # Avoid Python to write .pyc (Python cache) files in the container, for cleaning and reproducibility
@@ -22,11 +23,13 @@ RUN python -m pip install --no-cache-dir -r /app/requirements.txt
 COPY --chown=appuser:appuser manage.py /app/manage.py
 COPY --chown=appuser:appuser Traductor_TEA /app/Traductor_TEA
 COPY --chown=appuser:appuser backend /app/backend
+RUN mkdir /app/staticfiles && chown appuser:appuser /app/staticfiles
 
 USER appuser
 
 # Documents that the container listen in the 8000 port, however the actual publication is done in compose.yaml.
 EXPOSE 8000
 
-# Boots Django with the development server and is used 0.0.0.0 so that the container is accessible from the outside.
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Collect Admin assets before booting Django so Caddy can serve them with DEBUG disabled
+# and is used 0.0.0.0 so that the container is accessible from the outside.
+CMD ["sh", "-c", "python manage.py collectstatic --noinput && exec python manage.py runserver 0.0.0.0:8000"]
