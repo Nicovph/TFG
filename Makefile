@@ -23,7 +23,7 @@ TEST_COMMAND = $(COMPOSE) --profile test run --rm --build \
 	backend-test python manage.py test
 
 # Declare non-file targets so Make does not treat them as real files.
-.PHONY: run migrate makemigrations check check-local test test1 test2 test3 test4
+.PHONY: run migrate makemigrations check check-local test-backend-accounts test-backend-audit test-backend-preferences test-backend-interpretation test-frontend test-backend test-e2e test-all
 
 # Build and run the complete development stack in the background.
 run:
@@ -53,17 +53,28 @@ check:
 check-local:
 	DJANGO_DB_PROFILE=app $(PYTHON) manage.py check
 
-test:
+test-backend:
 	$(TEST_COMMAND)
 
-test1:
+test-backend-accounts:
 	$(TEST_COMMAND) backend/accounts
 
-test2:
+test-backend-audit:
 	$(TEST_COMMAND) backend/audit
 
-test3:
+test-backend-preferences:
 	$(TEST_COMMAND) backend/preferences
 
-test4:
+test-backend-interpretation:
 	$(TEST_COMMAND) backend/interpretation
+
+# Run fast browser-independent frontend tests.
+test-frontend:
+	npm --prefix frontend run test
+
+# Exercise the browser only against a fresh, isolated Compose stack.
+test-e2e:
+	./scripts/smoke-clean.sh
+
+# Run every automated layer in increasing integration scope.
+test-all: test-frontend test-backend test-e2e
