@@ -18,8 +18,8 @@ class Command(BaseCommand):
 
     # Description that will appear when executing python manage.py help promote_user.
     help = (
-        "Promote an existing Google OIDC-backed local user to staff and "
-        "superuser status."
+        "Promueve una cuenta local existente vinculada a Google OIDC y le "
+        "concede permisos de staff y superusuario."
     )
 
     # Defines the accepted command argumnets.
@@ -34,12 +34,15 @@ class Command(BaseCommand):
         selector_group.add_argument(
             "--user-id",
             dest="user_id",
-            help="Local UUID of the user to promote.",
+            help="UUID local de la cuenta que se va a promover.",
         )
         selector_group.add_argument(
             "--google-subject",
             dest="google_subject",
-            help="Opaque Google OIDC sub claim of the user to promote.",
+            help=(
+                "Declaración opaca sub de Google OIDC de la cuenta que se va "
+                "a promover."
+            ),
         )
 
     # Method called when the command is executed.
@@ -62,13 +65,13 @@ class Command(BaseCommand):
 
         if user.is_active and user.is_staff and user.is_superuser:
             self.stdout.write(
-                self.style.WARNING(f"User {user.id} is already promoted.")
+                self.style.WARNING(f"La cuenta {user.id} ya está promovida.")
             )
             return
 
         promoted_user = promote_user(user)
         self.stdout.write(
-            self.style.SUCCESS(f"Promoted user {promoted_user.id}.")
+            self.style.SUCCESS(f"Cuenta promovida: {promoted_user.id}.")
         )
 
     def _get_user(

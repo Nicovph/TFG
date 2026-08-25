@@ -22,7 +22,8 @@ from django.db import models
 google_subject_validator = RegexValidator(
     regex=r"\A[\x21-\x7e]{1,255}\Z",
     message=(
-        "El subject de Google debe contener entre 1 y 255 caracteres ASCII imprimibles."
+        "El subject de Google debe contener entre 1 y 255 "
+        "caracteres ASCII imprimibles."
     ),
     code="invalid_google_subject",
 )
@@ -192,6 +193,7 @@ class CustomUser(AbstractUser):
     # Track when the user record was last updated.
     updated_at = models.DateTimeField(
         auto_now=True,
+        verbose_name="fecha de actualización",
     )
 
     objects = CustomUserManager()
@@ -200,8 +202,10 @@ class CustomUser(AbstractUser):
     REQUIRED_FIELDS: list[str] = []
 
     class Meta(AbstractUser.Meta):
-        verbose_name = "user"
-        verbose_name_plural = "users"
+        """Expose Spanish model names in administration interfaces."""
+
+        verbose_name = "usuario"
+        verbose_name_plural = "usuarios"
 
     def clean(self) -> None:
         """Preserve the subject exactly as issued.

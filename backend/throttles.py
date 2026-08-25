@@ -33,7 +33,7 @@ class PseudonymousRateThrottle(SimpleRateThrottle, ABC):
             value = getattr(self, attribute, None)
             if not isinstance(value, str) or not value.strip():
                 raise ImproperlyConfigured(
-                    f"{self.__class__.__name__}.{attribute} debe ser un string no vacío."
+                    f"{self.__class__.__name__}.{attribute} debe ser una cadena de texto no vacía."
                 )
 
         if self.rate_period not in {"second", "minute", "hour", "day"}:

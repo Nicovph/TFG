@@ -1,7 +1,7 @@
 """Local account provisioning and promotion for federated users."""
 
 from dataclasses import dataclass
-from typing import Mapping
+from collections.abc import Mapping
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -41,7 +41,7 @@ def provision_user_from_claims(claims: Mapping[str, object]) -> GoogleLoginResul
     subject = claims.get("sub")
 
     if not isinstance(subject, str) or not subject:
-        raise GoogleOIDCTokenError("Claim OIDC obligatorio ausente: sub.")
+        raise GoogleOIDCTokenError("Claim OIDC obligatoria ausente: sub.")
 
     try:
         google_subject_validator(subject)

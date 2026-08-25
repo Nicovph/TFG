@@ -22,7 +22,10 @@ from .request_context import get_current_request_id
 # lowercase SHA-256 hexadecimal representation for source IP pseudonyms.
 source_hash_validator = RegexValidator(
     regex=r"\A[0-9a-f]{64}\Z",
-    message="El hash de origen debe ser un resumen hexadecimal SHA-256 en minúsculas.",
+    message=(
+        "El hash de origen debe contener 64 caracteres hexadecimales "
+        "SHA-256 en minúsculas."
+    ),
     code="invalid_source_hash",
 )
 
@@ -186,6 +189,8 @@ class SecurityEventManager(models.Manager.from_queryset(SecurityEventQuerySet)):
 
 # Predefined audit event categories used for filtering and reporting.
 class SecurityEventType(models.TextChoices):
+    """Define the closed Spanish labels for security event categories."""
+
     ACCOUNT_CREATED = "account_created", "Cuenta creada"
     ACCOUNT_SECURITY_UPDATED = "account_updated", "Estado de seguridad de la cuenta actualizado"
     LOGIN_SUCCEEDED = "login_succeeded", "Inicio de sesión exitoso"
@@ -217,6 +222,7 @@ class SecurityEvent(models.Model):
     event_type = models.CharField(
         max_length=32,
         choices=SecurityEventType.choices,
+        verbose_name="tipo de evento",
     )
     # Optional actor reference that can be null for unauthenticated events.
     actor = models.ForeignKey(
@@ -225,12 +231,14 @@ class SecurityEvent(models.Model):
         null=True,
         blank=True,
         related_name="security_events",
+        verbose_name="actor",
     )
     # Optional snapshot of the actor's UUID at the time of the event, for traceability if the account is deleted.
     actor_id_snapshot = models.UUIDField(
         null=True,
         blank=True,
         editable=False,
+        verbose_name="copia del UUID del actor",
         help_text="Copia del UUID local del actor para conservar trazabilidad si la cuenta se elimina.",
     )
     # Hashed source IP address; raw IPs must never be persisted here.
@@ -238,6 +246,7 @@ class SecurityEvent(models.Model):
         max_length=64,
         blank=True,
         validators=[source_hash_validator],
+        verbose_name="resumen de la IP de origen",
         help_text="Resumen HMAC-SHA-256 de la IP de origen; "
                   "nunca una dirección IP sin procesar.",
     )
@@ -245,16 +254,20 @@ class SecurityEvent(models.Model):
     request_id = models.UUIDField(
         null=True,
         blank=True,
+        verbose_name="identificador de solicitud",
         help_text="Identificador de correlación opcional generado por la aplicación.",
     )
     # Timestamp when the audit event was created.
     occurred_at = models.DateTimeField(
         auto_now_add=True,
+        verbose_name="fecha y hora del evento",
     )
 
     objects = SecurityEventManager()
 
     class Meta:
+        """Configure Spanish labels and append-only audit model metadata."""
+
         verbose_name = "evento de seguridad"
         verbose_name_plural = "eventos de seguridad"
         ordering = ("-occurred_at",)

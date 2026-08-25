@@ -14,8 +14,8 @@ class Command(BaseCommand):
     """Apply the configured quota-state retention policy manually."""
 
     help = (
-        "Delete pseudonymous LLM quota states older than the configured "
-        "retention period."
+        "Elimina los estados seudónimos de cuota del LLM anteriores al "
+        "periodo de conservación configurado."
     )
 
     def handle(self, *_args: object, **_options: object) -> None:

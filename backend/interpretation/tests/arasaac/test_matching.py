@@ -1,3 +1,5 @@
+"""Test deterministic pictogram matching without adding semantic meaning."""
+
 import httpx
 from django.test import SimpleTestCase, override_settings
 
@@ -10,6 +12,8 @@ from .helpers import ARASAAC_TEST_SETTINGS
 
 @override_settings(**ARASAAC_TEST_SETTINGS)
 class ArasaacMatchingTests(SimpleTestCase):
+    """Verify literal concept matching and bounded article equivalence."""
+
     def test_normalizes_comparison_and_preserves_provider_order_for_ties(
         self,
     ) -> None:

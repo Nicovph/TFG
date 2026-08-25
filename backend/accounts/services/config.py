@@ -108,7 +108,7 @@ def get_google_oidc_config() -> GoogleOIDCConfig:
 
     if any(not isinstance(algorithm, str) for algorithm in config.allowed_algorithms):
         raise GoogleOIDCConfigurationError(
-        "GOOGLE_OIDC_ALLOWED_ALGORITHMS debe contener strings."
+        "GOOGLE_OIDC_ALLOWED_ALGORITHMS debe contener cadenas de texto."
     )
 
     if config.allowed_algorithms != ("RS256",):
@@ -171,8 +171,8 @@ def _validate_endpoint_url(url: str, *, setting_name: str) -> None:
     
     if parsed_url.hostname not in {"accounts.google.com", "oauth2.googleapis.com"}:
         raise GoogleOIDCConfigurationError(
-        f"{setting_name} debe apuntar a un endpoint oficial esperado de Google."
-    )
+        f"{setting_name} debe apuntar a un endpoint oficial de Google."
+        )
 
 
 def _validate_redirect_uri(redirect_uri: str) -> None:

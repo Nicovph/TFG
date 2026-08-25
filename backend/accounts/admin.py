@@ -53,7 +53,7 @@ class CustomUserAdmin(admin.ModelAdmin):
     # Separate federated identity metadata from authorization settings.
     fieldsets = (
         (
-            "Federated identity",
+            "Identidad federada",
             {
                 "fields": (
                     "id",
@@ -65,7 +65,7 @@ class CustomUserAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "Authorization",
+            "Autorización",
             {
                 "fields": (
                     "is_active",

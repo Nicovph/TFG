@@ -40,7 +40,7 @@ class PromoteUserCommandTests(TestCase):
         self.assertTrue(user.is_superuser)
         self.assertFalse(user.has_usable_password())
         # getvalue() returns all the content that has been written to the StringIO since it was created.
-        self.assertIn("Promoted user", output.getvalue())
+        self.assertIn("Cuenta promovida", output.getvalue())
        # Compare if it was registered an unique security event of update for the user.
         self.assertEqual(
             SecurityEvent.objects.filter(
@@ -51,6 +51,11 @@ class PromoteUserCommandTests(TestCase):
         )
 
     def test_promote_user_command_accepts_google_subject_selector(self) -> None:
+        """Promote an account selected by its opaque Google subject.
+
+        Args:
+            self: The test case instance.
+        """
         user = CustomUser.objects.create_user(
             google_subject="google-subject-selector",
         )
@@ -68,7 +73,7 @@ class PromoteUserCommandTests(TestCase):
         self.assertTrue(user.is_active)
         self.assertTrue(user.is_staff)
         self.assertTrue(user.is_superuser)
-        self.assertIn("Promoted user", output.getvalue())
+        self.assertIn("Cuenta promovida", output.getvalue())
 
     def test_promote_user_command_rejects_invalid_uuid(self) -> None:
         """Reject malformed local UUID selectors before querying users.
@@ -105,7 +110,7 @@ class PromoteUserCommandTests(TestCase):
         self.assertTrue(user.is_active)
         self.assertTrue(user.is_staff)
         self.assertTrue(user.is_superuser)
-        self.assertIn("already promoted", output.getvalue())
+        self.assertIn("ya está promovida", output.getvalue())
         self.assertFalse(
             SecurityEvent.objects.filter(
                 actor=user,

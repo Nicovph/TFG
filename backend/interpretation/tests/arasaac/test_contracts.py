@@ -12,6 +12,8 @@ from ...arasaac import (
 
 
 class ArasaacContractTests(SimpleTestCase):
+    """Verify the closed public visual support contracts."""
+
     def test_message_whitespace_is_normalized_before_summary_validation(self) -> None:
         """Normalize whitespace before enforcing the fallback message invariant."""
         available_item = AvailablePictogram(

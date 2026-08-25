@@ -22,6 +22,8 @@ from .helpers import (
 
 @override_settings(**ARASAAC_TEST_SETTINGS)
 class ArasaacClientTests(SimpleTestCase):
+    """Verify bounded transport and untrusted response handling."""
+
     async def test_request_never_inherits_client_redirect_policy(self) -> None:
         """Refuse redirects even when the injected client would follow them."""
         requested_hosts: list[str] = []

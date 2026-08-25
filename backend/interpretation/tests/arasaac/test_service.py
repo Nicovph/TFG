@@ -39,6 +39,8 @@ def _available_pictogram(concept: str) -> AvailablePictogram:
 
 @override_settings(**ARASAAC_TEST_SETTINGS)
 class ArasaacServiceTests(SimpleTestCase):
+    """Verify visual support orchestration, cache behavior, and degradation."""
+
     def test_public_lookup_exposes_only_concepts(self) -> None:
         """Keep test-only transport injection out of the public interface."""
         self.assertEqual(

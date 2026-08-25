@@ -8,6 +8,7 @@ class InterpretationConfig(AppConfig):
 
     default_auto_field = "django.db.models.BigAutoField"
     name = 'backend.interpretation'
+    verbose_name = "Interpretación"
 
     def ready(self) -> None:
         """Register interpretation system checks when Django loads the app."""

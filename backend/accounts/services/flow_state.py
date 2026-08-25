@@ -2,7 +2,7 @@
 
 import secrets # Is used to generate secure random values.
 import urllib.parse
-from typing import Mapping
+from collections.abc import Mapping
 
 from django.conf import settings
 from django.core.cache import (
@@ -132,20 +132,22 @@ def consume_google_oidc_state(
     metadata = flow_cache.get(cache_key)
 
     if not isinstance(metadata, Mapping):
-        raise GoogleOIDCStateError("State no válido.")
+        raise GoogleOIDCStateError("El parámetro state no es válido.")
 
     now = int(timezone.now().timestamp())
     expires_at = metadata.get("expires_at")
 
     if not isinstance(expires_at, int) or expires_at <= now:
         flow_cache.delete(cache_key)
-        raise GoogleOIDCStateError("State caducado.")
+        raise GoogleOIDCStateError("El parámetro state ha caducado.")
 
     # Obtains the Django session from the callback.
     session_key = request.session.session_key
 
     if not session_key:
-        raise GoogleOIDCStateError("Sesión no iniciada para el callback.")
+        raise GoogleOIDCStateError(
+            "No existe una sesión iniciada para el callback de autenticación."
+        )
 
     expected_session_hash = metadata.get("session_key_hash")
 
@@ -154,7 +156,9 @@ def consume_google_oidc_state(
         expected_session_hash,
         _session_key_hash(session_key),
     ):
-        raise GoogleOIDCStateError("State no pertenece a esta sesión.")
+        raise GoogleOIDCStateError(
+            "El parámetro state no pertenece a esta sesión."
+        )
 
     if metadata.get("client_id") != config.client_id:
         flow_cache.delete(cache_key)
@@ -162,7 +166,7 @@ def consume_google_oidc_state(
 
     if metadata.get("redirect_uri") != config.redirect_uri:
         flow_cache.delete(cache_key)
-        raise GoogleOIDCStateError("Redirect URI OAuth/OIDC inconsistente.")
+        raise GoogleOIDCStateError("URI de redirección OAuth/OIDC incoherente.")
 
     # Prevents reuse of the state.
     flow_cache.delete(cache_key)
