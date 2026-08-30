@@ -52,4 +52,13 @@ dist-ssr
 .codex
 .agents
 AGENTS.md
-docs
+docs/**
+
+!docs/wireframes/
+docs/wireframes/*
+
+!docs/wireframes/movil/
+!docs/wireframes/movil/**
+
+!docs/wireframes/ordenador/
+!docs/wireframes/ordenador/**
